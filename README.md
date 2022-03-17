@@ -14,7 +14,8 @@ SKSE plugin that trigger killmoves after the hit landed. Also prone execution an
 	* You need to build from the powerof3/dev-ae branch
 	* Also SetAngleX and SetAngleZ from ersh1's branch
 	* Add this as as an environment variable `CommonLibSSEPath`
-* [json](https://github.com/powerof3/CommonLibSSE/tree/dev)
+* [json](https://github.com/nlohmann/json)
+	* included
 
 ## License
 [MIT](LICENSE)
