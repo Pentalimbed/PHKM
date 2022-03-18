@@ -26,8 +26,11 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
     if (!canTrigger(a_attacker, a_victim, do_exec, a_hitData.totalDamage))
         return orig_func();
 
+    logger::debug("total damage: {}, blocked percent: {}, health: {}",
+                  a_hitData.totalDamage, a_hitData.percentBlocked, a_victim->GetActorValue(RE::ActorValue::kHealth));
+
     // Non-animated ragdoll execution
-    if (config->animated_ragdoll_exec && isInRagdoll(a_victim))
+    if (!config->animated_ragdoll_exec && isInRagdoll(a_victim))
     {
         a_hitData.totalDamage = 1e8;
         return orig_func();
@@ -52,7 +55,7 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
     // Alter damage and cancel stagger;
     a_hitData.totalDamage = 0;
     a_hitData.stagger     = 0;
-    if (isInRagdoll(a_victim)) // Still can't figure out how to make it work
+    if (isInRagdoll(a_victim)) // Not too consistent
     {
         a_victim->NotifyAnimationGraph("GetUpStart");
         a_victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
@@ -64,8 +67,6 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
         }
         a_victim->EnableAI(true);
         a_victim->SetLifeState(RE::ACTOR_LIFE_STATE::kAlive);
-
-        // a_hitData.totalDamage = 100000000.0;  // Just kill the goddamn thing!
     }
     orig_func();
 
