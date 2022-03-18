@@ -9,7 +9,11 @@ namespace phkm
 inline bool playPairedIdle(RE::AIProcess* proc, RE::Actor* attacker, RE::DEFAULT_OBJECT smth, RE::TESIdleForm* idle, bool a5, bool a6, RE::TESObjectREFR* target)
 {
     using func_t = decltype(&playPairedIdle);
-    REL::Relocation<func_t> func{REL::ID(39256)}; // SE - 38290
+#ifdef SE_VERSION
+    REL::Relocation<func_t> func{REL::ID(38290)};
+#else
+    REL::Relocation<func_t> func{REL::ID(39256)};
+#endif
     return func(proc, attacker, smth, idle, a5, a6, target);
 }
 
@@ -17,8 +21,14 @@ struct ProcessHitHook
 {
     static void                                    thunk(RE::Actor* a_victim, RE::HitData& a_hitData);
     static inline REL::Relocation<decltype(thunk)> func;
-    static inline uint64_t                         id     = 38627; // SE - 37673
-    static inline size_t                           offset = 0x4a8; // SE - 0x3c0
+
+#ifdef SE_VERSION
+    static inline uint64_t id     = 37673;
+    static inline size_t   offset = 0x3c0;
+#else
+    static inline uint64_t  id     = 38627;
+    static inline size_t    offset = 0x4a8;
+#endif
 
     static bool checkActors(RE::Actor* attacker, RE::Actor* victim);
     static bool isValid(RE::Actor* actor);

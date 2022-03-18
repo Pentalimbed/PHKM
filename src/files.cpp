@@ -210,6 +210,11 @@ std::optional<AnimEntry> AnimEntryParser::parseEntry(const nlohmann::json& j, co
                 misc_cond_json.at("sneak").get_to(entry.misc_conds.is_sneak);
                 misc_cond_json.at("min_angle").get_to(entry.misc_conds.min_angle);
                 misc_cond_json.at("max_angle").get_to(entry.misc_conds.max_angle);
+                while (entry.misc_conds.min_angle < -90)
+                {
+                    entry.misc_conds.min_angle += 360;
+                    entry.misc_conds.max_angle += 360;
+                }
             }
             catch (nlohmann::json::out_of_range e)
             {
