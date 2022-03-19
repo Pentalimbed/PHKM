@@ -10,8 +10,6 @@
 namespace logger = SKSE::log;
 using namespace std::literals;
 
-// #define SE_VERSION
-
 namespace stl
 {
 template <class F, class T>

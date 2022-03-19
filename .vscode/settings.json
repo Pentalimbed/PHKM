@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "optional": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "variant": "cpp"
     },
 }

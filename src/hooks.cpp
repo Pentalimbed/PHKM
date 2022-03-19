@@ -86,7 +86,7 @@ bool ProcessHitHook::checkActors(RE::Actor* attacker, RE::Actor* victim)
 
 bool ProcessHitHook::isValid(RE::Actor* actor)
 {
-    return actor->Is3DLoaded() && !actor->IsDead() && !actor->IsInKillMove();
+    return actor->Is3DLoaded() && !actor->IsDead() && !actor->IsInKillMove() && !actor->IsOnMount();
 }
 
 bool ProcessHitHook::canExecute(RE::Actor* victim)
