@@ -30,6 +30,7 @@ struct ProcessHitHook
     static inline size_t    offset = 0x4a8;
 #endif
 
+    static void bugFixAttempts(RE::Actor* attacker, RE::Actor* victim);
     static bool checkActors(RE::Actor* attacker, RE::Actor* victim);
     static bool isValid(RE::Actor* actor);
     static bool canExecute(RE::Actor* victim);

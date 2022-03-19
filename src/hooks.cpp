@@ -21,6 +21,18 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
 
     logger::debug("Receive hit from: {} to: {}", a_attacker->GetName(), a_victim->GetName());
 
+    // Duct tapes
+    bugFixAttempts(a_attacker, a_victim);
+
+    // Bypass for testing
+    if (false)
+    {
+        // Single paired test
+        // AnimEntryParser::getSingleton()->entries["execground01"].play(a_attacker, a_victim);
+        // a_hitData.totalDamage = 0;
+        // return orig_func();
+    }
+
     // Check execution and other conditions
     bool do_exec = canExecute(a_victim);
     if (!canTrigger(a_attacker, a_victim, do_exec, a_hitData.totalDamage))
@@ -66,7 +78,6 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
             charController->flags.set(RE::CHARACTER_FLAGS::kHitFlags);
         }
         a_victim->EnableAI(true);
-        a_victim->SetLifeState(RE::ACTOR_LIFE_STATE::kAlive);
     }
     orig_func();
 
@@ -75,6 +86,19 @@ void ProcessHitHook::thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
     auto&                                 entry = std::next(entries_copy.begin(), distro(random_engine))->second;
 
     entry.play(a_attacker, a_victim);
+}
+
+void ProcessHitHook::bugFixAttempts(RE::Actor* attacker, RE::Actor* victim)
+{
+    // Unkillable bug
+    if ((!victim->IsEssential() || ((victim->boolFlags & RE::Actor::BOOL_FLAGS::kProtected) && attacker->IsPlayerRef())) &&
+        victim->GetActorValue(RE::ActorValue::kHealth) < 0 && !victim->IsDead())
+    {
+        victim->SetLifeState(RE::ACTOR_LIFE_STATE::kDead);
+    }
+
+    // Stop right there you paralyze scum!
+    // TODO
 }
 
 bool ProcessHitHook::checkActors(RE::Actor* attacker, RE::Actor* victim)
@@ -86,7 +110,7 @@ bool ProcessHitHook::checkActors(RE::Actor* attacker, RE::Actor* victim)
 
 bool ProcessHitHook::isValid(RE::Actor* actor)
 {
-    return actor->Is3DLoaded() && !actor->IsDead() && !actor->IsInKillMove() && !actor->IsOnMount();
+    return actor->Is3DLoaded() && !actor->IsDead() && !isInPairedAnimation(actor) && !actor->IsOnMount();
 }
 
 bool ProcessHitHook::canExecute(RE::Actor* victim)
@@ -135,17 +159,8 @@ bool ProcessHitHook::canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_
     if (do_exec ? config->last_enemy_exec : config->last_enemy_km)
     {
         // Seems not working on npcs killing player
-        if (!victim->IsPlayerRef())
-        {
-            RE::TESConditionItem isLastHostileActor;
-            isLastHostileActor.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kIsLastHostileActor;
-            isLastHostileActor.data.comparisonValue.f     = 1.0f;
-            isLastHostileActor.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
-            isLastHostileActor.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
-            RE::ConditionCheckParams params(attacker->As<RE::TESObjectREFR>(), victim->As<RE::TESObjectREFR>());
-            if (!isLastHostileActor(params))
-                return false;
-        }
+        if (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim))
+            return false;
     }
     logger::debug("5");
     return true;
@@ -171,7 +186,7 @@ void ProcessHitHook::filterEntries(std::unordered_map<std::string, AnimEntry>& e
         std::erase_if(entries, [&](const auto& item) { return !item.second.is_paired; });
 
     // Sneak check
-    bool is_sneaking = attacker->IsSneaking();
+    bool is_sneaking = attacker->IsSneaking() && !isDetectedBy(attacker, victim);
     std::erase_if(entries, [&](const auto& item) { return is_sneaking != item.second.misc_conds.is_sneak; });
 
     // Angle check

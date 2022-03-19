@@ -140,4 +140,39 @@ inline bool isInRagdoll(RE::Actor* actor)
     return actor->GetKnockState() != RE::KNOCK_STATE_ENUM::kNormal;
 }
 
+// Lazy condition workarounds
+inline bool isDetectedBy(RE::Actor* subject, RE::Actor* target)
+{
+    RE::TESConditionItem isDetectedCond;
+    isDetectedCond.data.functionData.function  = RE::FUNCTION_DATA::FunctionID::kGetDetected;
+    isDetectedCond.data.functionData.params[0] = nullptr;
+    isDetectedCond.data.comparisonValue.f      = 1.0f;
+    isDetectedCond.data.flags.opCode           = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
+    isDetectedCond.data.object                 = RE::CONDITIONITEMOBJECT::kTarget;
+    RE::ConditionCheckParams params(subject->As<RE::TESObjectREFR>(), target->As<RE::TESObjectREFR>());
+    return isDetectedCond(params);
+}
+
+inline bool isLastHostileActor(RE::Actor* subject, RE::Actor* target)
+{
+    RE::TESConditionItem isLastHostileActorCond;
+    isLastHostileActorCond.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kIsLastHostileActor;
+    isLastHostileActorCond.data.comparisonValue.f     = 1.0f;
+    isLastHostileActorCond.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
+    isLastHostileActorCond.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
+    RE::ConditionCheckParams params(subject->As<RE::TESObjectREFR>(), target->As<RE::TESObjectREFR>());
+    return isLastHostileActorCond(params);
+}
+
+inline bool isInPairedAnimation(RE::Actor* actor)
+{
+    RE::TESConditionItem isLastHostileActorCond;
+    isLastHostileActorCond.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kGetPairedAnimation;
+    isLastHostileActorCond.data.comparisonValue.f     = 0.0f;
+    isLastHostileActorCond.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kNotEqualTo;
+    isLastHostileActorCond.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
+    RE::ConditionCheckParams params(nullptr, actor->As<RE::TESObjectREFR>());
+    return isLastHostileActorCond(params);
+}
+
 } // namespace phkm

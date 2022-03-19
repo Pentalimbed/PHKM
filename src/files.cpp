@@ -4,6 +4,7 @@
 
 #include "hooks.h"
 #include "utils.h"
+#include "events.h"
 
 namespace phkm
 {
@@ -102,6 +103,9 @@ void AnimEntry::play(RE::Actor* attacker, RE::Actor* victim) const
     }
     else
     {
+        // AnimEventSink::RegisterSink(attacker);
+        // victim->NotifyAnimationGraph("IdleForceDefaultState");
+
         const auto& unpaired_info = std::get<UnpairedInfo>(anim_info);
         reposition(victim, attacker, unpaired_info.dist, unpaired_info.victim_offset_angle, unpaired_info.attacker_offset_angle);
         attacker->NotifyAnimationGraph(name + attacker_suffix);
