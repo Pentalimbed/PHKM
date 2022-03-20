@@ -1,5 +1,6 @@
 #include "hooks.h"
 #include "files.h"
+#include "phkm.h"
 
 bool installLog()
 {
@@ -33,15 +34,17 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
     switch (a_msg->type)
     {
         case SKSE::MessagingInterface::kDataLoaded:
-            logger::debug("Game data loaded");
+            logger::debug("kDataLoaded");
             if (ConfigParser::getSingleton()->isEnabled())
             {
                 AnimEntryParser::getSingleton()->readEntries();
             }
+            addConditionToParaFX();
             break;
         case SKSE::MessagingInterface::kPostLoad:
             break;
         case SKSE::MessagingInterface::kPostLoadGame:
+            logger::debug("kPostLoadGame");
             break;
         case SKSE::MessagingInterface::kPostPostLoad:
             break;

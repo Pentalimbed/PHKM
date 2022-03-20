@@ -130,9 +130,17 @@ inline float getDamageMult(bool is_player)
     return setting->data.f;
 }
 
+typedef void(_fastcall* _setIsGhost)(RE::Actor* actor, bool isGhost);
+static REL::Relocation<_setIsGhost> setIsGhost{REL::ID(36287)};
+
+inline bool isProtected(RE::Actor* actor)
+{
+    return actor->boolFlags.all(RE::Actor::BOOL_FLAGS::kProtected);
+}
+
 inline bool isParalyzed(RE::Actor* actor)
 {
-    return static_cast<bool>(actor->HasEffectWithArchetype(RE::MagicTarget::Archetype::kParalysis));
+    return actor->HasEffectWithArchetype(RE::MagicTarget::Archetype::kParalysis);
 }
 
 inline bool isInRagdoll(RE::Actor* actor)
@@ -173,6 +181,32 @@ inline bool isInPairedAnimation(RE::Actor* actor)
     isLastHostileActorCond.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
     RE::ConditionCheckParams params(nullptr, actor->As<RE::TESObjectREFR>());
     return isLastHostileActorCond(params);
+}
+
+inline void addConditionToParaFX()
+{
+    for (auto magic_fx_form : RE::TESDataHandler::GetSingleton()->GetFormArray(RE::FormType::MagicEffect))
+    {
+        auto magic_fx = magic_fx_form->As<RE::EffectSetting>();
+        if (magic_fx->HasArchetype(RE::EffectSetting::Archetype::kParalysis) || magic_fx->HasKeywordString("MagicParalysis")) // Goddamn CACO!
+        {
+            auto target = magic_fx->conditions.head;
+            if (target)
+            {
+                while (target->next)
+                    target = target->next;
+                target->next = new RE::TESConditionItem;
+                target       = target->next;
+            }
+            else
+                target = magic_fx->conditions.head = new RE::TESConditionItem;
+
+            target->data.functionData.function = RE::FUNCTION_DATA::FunctionID::kGetPairedAnimation;
+            target->data.comparisonValue.f     = 0.0f;
+            target->data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
+            target->data.object                = RE::CONDITIONITEMOBJECT::kSelf;
+        }
+    }
 }
 
 } // namespace phkm

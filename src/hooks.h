@@ -3,6 +3,7 @@
 
 #include "files.h"
 #include "utils.h"
+#include "phkm.h"
 
 namespace phkm
 {
@@ -19,7 +20,11 @@ inline bool playPairedIdle(RE::AIProcess* proc, RE::Actor* attacker, RE::DEFAULT
 
 struct ProcessHitHook
 {
-    static void                                    thunk(RE::Actor* a_victim, RE::HitData& a_hitData);
+    inline static void thunk(RE::Actor* a_victim, RE::HitData& a_hitData)
+    {
+        if (PostHitModule::process(a_victim, a_hitData))
+            return func(a_victim, a_hitData);
+    }
     static inline REL::Relocation<decltype(thunk)> func;
 
 #ifdef BUILD_SE
@@ -29,13 +34,6 @@ struct ProcessHitHook
     static inline uint64_t  id     = 38627;
     static inline size_t    offset = 0x4a8;
 #endif
-
-    static void bugFixAttempts(RE::Actor* attacker, RE::Actor* victim);
-    static bool checkActors(RE::Actor* attacker, RE::Actor* victim);
-    static bool isValid(RE::Actor* actor);
-    static bool canExecute(RE::Actor* victim);
-    static bool canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_exec, float total_damage);
-    static void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, bool do_exec);
 };
 
 /*
