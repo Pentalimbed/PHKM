@@ -5,8 +5,19 @@
   "homepage": "",
   "license": "MIT",
   "dependencies": [
+    "xbyak",
     "boost-stl-interfaces",
     "rsm-binary-io",
-    "spdlog"
+    "spdlog",
+    "nlohmann-json",
+    "tomlplusplus",
+    "xbyak",
+    {
+      "name":  "imgui",
+      "features":  [
+                       "dx11-binding",
+                       "win32-binding"
+                   ]
+  }
   ]
 }

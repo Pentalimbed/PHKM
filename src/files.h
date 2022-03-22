@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <variant>
 
-#include "../extern/json.hpp"
+#include "nlohmann/json.hpp"
 
 namespace phkm
 {

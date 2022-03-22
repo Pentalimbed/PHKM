@@ -7,15 +7,25 @@ namespace phkm
 class PostHitModule
 {
 public:
-    static bool process(RE::Actor* victim, RE::HitData& hit_data);
+    static PostHitModule* getSingleton()
+    {
+        static PostHitModule module;
+        return std::addressof(module);
+    }
+
+    bool process(RE::Actor* victim, RE::HitData& hit_data);
+    void update();
+
+    std::vector<std::pair<double, std::function<void()>>> delayed_funcs;
+    std::mutex                                            delayed_funcs_mutex;
 
 private:
-    static void bugFixes(RE::Actor* attacker, RE::Actor* victim);
-    static bool checkActors(RE::Actor* attacker, RE::Actor* victim);
-    static bool isValid(RE::Actor* actor);
-    static bool canExecute(RE::Actor* victim);
-    static bool canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_exec, float total_damage);
-    static void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool do_exec);
-    static void prepareForKillmove(RE::Actor* actor);
+    void bugFixes(RE::Actor* attacker, RE::Actor* victim);
+    bool checkActors(RE::Actor* attacker, RE::Actor* victim);
+    bool isValid(RE::Actor* actor);
+    bool canExecute(RE::Actor* victim);
+    bool canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_exec, float total_damage);
+    void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool do_exec);
+    void prepareForKillmove(RE::Actor* actor);
 };
 } // namespace phkm

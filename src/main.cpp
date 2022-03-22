@@ -35,11 +35,10 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
     {
         case SKSE::MessagingInterface::kDataLoaded:
             logger::debug("kDataLoaded");
-            if (ConfigParser::getSingleton()->isEnabled())
-            {
-                AnimEntryParser::getSingleton()->readEntries();
-            }
-            addConditionToParaFX();
+            AnimEntryParser::getSingleton()->readEntries();
+            stl::write_thunk_call<ProcessHitHook>();
+            stl::write_thunk_call<UpdateHook>();
+            logger::info("Hook installed.");
             break;
         case SKSE::MessagingInterface::kPostLoad:
             break;
@@ -97,7 +96,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     logger::info("Plugin loaded.");
 
     SKSE::Init(a_skse);
-    SKSE::AllocTrampoline(1 << 4);
+    SKSE::AllocTrampoline(2 << 4);
 
     using namespace phkm;
 
@@ -125,9 +124,6 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     // stl::write_vfunc<RE::Actor, HandleDamageVfunc>();
     // stl::write_vfunc<RE::Character, HandleDamageVfunc>();
     // stl::write_vfunc<RE::PlayerCharacter, HandleDamageVfunc>();
-
-    stl::write_thunk_call<ProcessHitHook>();
-    logger::info("Hook installed.");
 
     return true;
 }

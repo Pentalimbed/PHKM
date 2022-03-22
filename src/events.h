@@ -1,4 +1,5 @@
 #pragma once
+#include "phkm.h"
 
 namespace phkm
 {
@@ -16,6 +17,7 @@ public:
         logger::debug("Just logging BSAnimationGraphEvent!");
         logger::debug("tag: {}, holder: {}, payload: {}",
                       a_event->tag, a_event->holder->GetName(), a_event->payload);
+
         return RE::BSEventNotifyControl::kContinue;
     }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../extern/json.hpp"
+#include "nlohmann/json.hpp"
 
 #ifndef M_PI
 #    define M_PI 3.141592653589793238462643383279
@@ -130,9 +130,6 @@ inline float getDamageMult(bool is_player)
     return setting->data.f;
 }
 
-typedef void(_fastcall* _setIsGhost)(RE::Actor* actor, bool isGhost);
-static REL::Relocation<_setIsGhost> setIsGhost{REL::ID(36287)};
-
 inline bool isProtected(RE::Actor* actor)
 {
     return actor->boolFlags.all(RE::Actor::BOOL_FLAGS::kProtected);
@@ -149,64 +146,7 @@ inline bool isInRagdoll(RE::Actor* actor)
 }
 
 // Lazy condition workarounds
-inline bool isDetectedBy(RE::Actor* subject, RE::Actor* target)
-{
-    RE::TESConditionItem isDetectedCond;
-    isDetectedCond.data.functionData.function  = RE::FUNCTION_DATA::FunctionID::kGetDetected;
-    isDetectedCond.data.functionData.params[0] = nullptr;
-    isDetectedCond.data.comparisonValue.f      = 1.0f;
-    isDetectedCond.data.flags.opCode           = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
-    isDetectedCond.data.object                 = RE::CONDITIONITEMOBJECT::kTarget;
-    RE::ConditionCheckParams params(subject->As<RE::TESObjectREFR>(), target->As<RE::TESObjectREFR>());
-    return isDetectedCond(params);
-}
-
-inline bool isLastHostileActor(RE::Actor* subject, RE::Actor* target)
-{
-    RE::TESConditionItem isLastHostileActorCond;
-    isLastHostileActorCond.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kIsLastHostileActor;
-    isLastHostileActorCond.data.comparisonValue.f     = 1.0f;
-    isLastHostileActorCond.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
-    isLastHostileActorCond.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
-    RE::ConditionCheckParams params(subject->As<RE::TESObjectREFR>(), target->As<RE::TESObjectREFR>());
-    return isLastHostileActorCond(params);
-}
-
-inline bool isInPairedAnimation(RE::Actor* actor)
-{
-    RE::TESConditionItem isLastHostileActorCond;
-    isLastHostileActorCond.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kGetPairedAnimation;
-    isLastHostileActorCond.data.comparisonValue.f     = 0.0f;
-    isLastHostileActorCond.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kNotEqualTo;
-    isLastHostileActorCond.data.object                = RE::CONDITIONITEMOBJECT::kTarget;
-    RE::ConditionCheckParams params(nullptr, actor->As<RE::TESObjectREFR>());
-    return isLastHostileActorCond(params);
-}
-
-inline void addConditionToParaFX()
-{
-    for (auto magic_fx_form : RE::TESDataHandler::GetSingleton()->GetFormArray(RE::FormType::MagicEffect))
-    {
-        auto magic_fx = magic_fx_form->As<RE::EffectSetting>();
-        if (magic_fx->HasArchetype(RE::EffectSetting::Archetype::kParalysis) || magic_fx->HasKeywordString("MagicParalysis")) // Goddamn CACO!
-        {
-            auto target = magic_fx->conditions.head;
-            if (target)
-            {
-                while (target->next)
-                    target = target->next;
-                target->next = new RE::TESConditionItem;
-                target       = target->next;
-            }
-            else
-                target = magic_fx->conditions.head = new RE::TESConditionItem;
-
-            target->data.functionData.function = RE::FUNCTION_DATA::FunctionID::kGetPairedAnimation;
-            target->data.comparisonValue.f     = 0.0f;
-            target->data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
-            target->data.object                = RE::CONDITIONITEMOBJECT::kSelf;
-        }
-    }
-}
-
+bool isDetectedBy(RE::Actor* subject, RE::Actor* target);
+bool isLastHostileActor(RE::Actor* subject, RE::Actor* target);
+bool isInPairedAnimation(RE::Actor* actor);
 } // namespace phkm

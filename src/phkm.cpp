@@ -1,9 +1,35 @@
 #include "phkm.h"
 
+#include <thread>
+#include <chrono>
+
 #include "utils.h"
+#include "events.h"
+#include "hooks.h"
 
 namespace phkm
 {
+// Called every frame
+void PostHitModule::update()
+{
+    auto delta_time = *g_delta_real_time;
+    delayed_funcs_mutex.lock();
+    std::erase_if(
+        delayed_funcs, [=](auto& pair) {
+            auto& [delay_time, func] = pair;
+            delay_time -= delta_time;
+            if (delay_time < 0)
+            {
+                logger::debug("Executing delayed func");
+                func();
+                return true;
+            }
+            return false;
+        });
+    delayed_funcs_mutex.unlock();
+}
+
+
 // return true if original func are to be called
 bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
 {
@@ -41,35 +67,36 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     logger::debug("total damage: {}, blocked percent: {}, health: {}",
                   hit_data.totalDamage, hit_data.percentBlocked, victim->GetActorValue(RE::ActorValue::kHealth));
 
-    // Non-animated ragdoll execution
-    if (!config->animated_ragdoll_exec && isInRagdoll(victim))
-    {
-        logger::debug("Non animated execution!");
-        victim->KillImpl(attacker, victim->GetActorValue(RE::ActorValue::kHealth), true, true);
-        if (!victim->IsDead())
-        {
-            hit_data.totalDamage = 1e9;
-        }
-        return true;
-    }
-
     // Killmove chance
-    static std::uniform_real_distribution<float> km_chance_distro(0, 1.0f);
-    float                                        km_chance = attacker->IsPlayerRef() ? config->km_chance : config->npc_km_chance;
+    std::uniform_real_distribution<float> km_chance_distro(0, 1.0f);
+    float                                 km_chance = attacker->IsPlayerRef() ? config->km_chance : config->npc_km_chance;
     if (!do_exec && (km_chance_distro(random_engine) > km_chance))
         return true;
+
+    // Non-animated
+    if (do_exec && isInRagdoll(victim) && !config->animated_ragdoll_exec)
+    {
+        hit_data.totalDamage = 1e9;
+        return true;
+    }
 
     // Filtering entries
     auto entries_copy(AnimEntryParser::getSingleton()->entries);
     filterEntries(entries_copy, attacker, victim, hit_data, do_exec);
     if (entries_copy.empty())
+    {
+        logger::debug("No animation selected!");
+        if (do_exec && isInRagdoll(victim))
+            hit_data.totalDamage = 1e9;
         return true;
+    }
+
     for (auto& item : entries_copy)
     {
         logger::debug("{} selected!", item.second.name);
     }
 
-    // Alter damage and cancel stagger;
+    // Alter damage and cancel stagger; * Not needed since the hitdata is not passed down
     hit_data.totalDamage = 0;
     hit_data.stagger     = 0;
 
@@ -78,10 +105,27 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     prepareForKillmove(victim);
 
     // Lottery and play
-    std::uniform_int_distribution<size_t>
-          distro(0, entries_copy.size() - 1);
-    auto& entry = std::next(entries_copy.begin(), distro(random_engine))->second;
-    entry.play(attacker, victim);
+    std::uniform_int_distribution<size_t> distro(0, entries_copy.size() - 1);
+    auto                                  entry = std::next(entries_copy.begin(), distro(random_engine))->second;
+
+    if (isInRagdoll(victim))
+    {
+        victim->SetPosition(RE::NiPoint3(victim->data.location.x, victim->data.location.y, attacker->GetPositionZ()), true);
+        victim->SetActorValue(RE::ActorValue::kParalysis, 0);
+        victim->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
+        victim->NotifyAnimationGraph("GetUpStart");
+
+        logger::debug("delayed execution!");
+        delayed_funcs_mutex.lock();
+        delayed_funcs.push_back(std::make_pair(0.2f, [=]() {
+            victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
+            victim->NotifyAnimationGraph("GetUpExit");
+            entry.play(attacker, victim);
+        }));
+        delayed_funcs_mutex.unlock();
+    }
+    else
+        entry.play(attacker, victim);
 
     return false;
 }
@@ -245,18 +289,34 @@ void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& en
 
 void PostHitModule::prepareForKillmove(RE::Actor* actor)
 {
-    actor->EnableAI(true);
-    if (isInRagdoll(actor)) // Not too consistent
+    if (!actor->IsGhost())
     {
-        actor->NotifyAnimationGraph("GetUpStart");
-        actor->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
-        if (const auto charController = actor->GetCharController(); charController)
-        {
-            charController->flags.reset(RE::CHARACTER_FLAGS::kNotPushable);
-            charController->flags.set(RE::CHARACTER_FLAGS::kRecordHits);
-            charController->flags.set(RE::CHARACTER_FLAGS::kHitFlags);
-        }
-    };
-    // actor->As<RE::BGSKeywordForm>()->AddKeyword(RE::TESForm::LookupByEditorID<RE::BGSKeyword>("ImmuneParalysis"));
+        setIsGhost(actor, true);
+        delayed_funcs_mutex.lock();
+        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
+            setIsGhost(actor, false);
+        }));
+        delayed_funcs_mutex.unlock();
+    }
+    auto para_kwd = RE::TESForm::LookupByEditorID<RE::BGSKeyword>("ImmuneParalysis");
+    if (para_kwd && !actor->HasKeyword(para_kwd))
+    {
+        actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(para_kwd);
+        delayed_funcs_mutex.lock();
+        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
+            actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(para_kwd);
+        }));
+        delayed_funcs_mutex.unlock();
+    }
+    auto push_kwd = RE::TESForm::LookupByEditorID<RE::BGSKeyword>("ImmuneStrongUnrelentingForce");
+    if (push_kwd && !actor->HasKeyword(push_kwd))
+    {
+        actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(push_kwd);
+        delayed_funcs_mutex.lock();
+        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
+            actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(push_kwd);
+        }));
+        delayed_funcs_mutex.unlock();
+    }
 }
 } // namespace phkm
