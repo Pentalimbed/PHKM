@@ -29,7 +29,6 @@ void PostHitModule::update()
     delayed_funcs_mutex.unlock();
 }
 
-
 // return true if original func are to be called
 bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
 {
