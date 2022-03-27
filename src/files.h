@@ -50,22 +50,9 @@ private:
 
 struct AnimEntry
 {
-    std::string name;
+    std::string      name;
+    RE::TESIdleForm* idle_form;
 
-    bool is_paired;
-    struct PairedInfo
-    {
-        RE::TESIdleForm* idle_form;
-    };
-    struct UnpairedInfo
-    {
-        float dist                  = 10.0;
-        float attacker_offset_angle = 0.0;
-        float victim_offset_angle   = 0.0;
-    };
-    std::variant<PairedInfo, UnpairedInfo> anim_info;
-
-    // These are flexible
     // Actor conditions: keyword of (weapon/actor/race), faction, race, sneaking, weaptype
     nlohmann::json attacker_conds = {};
     nlohmann::json victim_conds   = {};

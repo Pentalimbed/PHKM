@@ -2,6 +2,9 @@
 #include "files.h"
 #include "phkm.h"
 
+// #include "DKUtil/GUI.hpp"
+// #include "DKUtil/Hook.hpp"
+
 bool installLog()
 {
     auto path = logger::log_directory();
@@ -41,9 +44,12 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
             logger::info("Hook installed.");
             break;
         case SKSE::MessagingInterface::kPostLoad:
+            // DKUtil::GUI::InitD3D();
+            // DKUtil::GUI::AddCallback(FUNC_INFO(showMainWindow));
             break;
         case SKSE::MessagingInterface::kPostLoadGame:
             logger::debug("kPostLoadGame");
+            DelayedFuncModule::getSingleton()->flush();
             break;
         case SKSE::MessagingInterface::kPostPostLoad:
             break;
@@ -56,7 +62,7 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
 {
     a_info->infoVersion = SKSE::PluginInfo::kVersion;
-    a_info->name        = Version::PROJECT;
+    a_info->name        = Version::PROJECT.data();
     a_info->version     = Version::VERSION[0];
 
     if (a_skse->IsEditor())
@@ -108,7 +114,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
             return false;
         }
     }
-    catch (nlohmann::json::type_error e)
+    catch (std::exception e)
     {
         logger::critical("Failed to parse config file. Mod disabled.");
         return false;

@@ -35,10 +35,10 @@ struct ProcessHitHook
 
 struct UpdateHook
 {
-    inline static void thunk()
+    inline static void thunk(RE::Main* a_this, float a2)
     {
-        PostHitModule::getSingleton()->update();
-        func();
+        func(a_this, a2);
+        DelayedFuncModule::getSingleton()->update();
     }
     static inline REL::Relocation<decltype(thunk)> func;
 

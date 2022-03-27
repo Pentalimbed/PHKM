@@ -12,8 +12,6 @@ macro(set_from_environment VARIABLE)
 	endif ()
 endmacro()
 
-option(BUILD_SE "build_se" OFF)
-
 if(BUILD_SE)
 	set(CommonLibSSEPath "E:/dev/projects/SKSE/CommonLibSSE-dev")
 	add_definitions(-DBUILD_SE)
@@ -46,7 +44,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STR
 
 project(
 	PHKM
-	VERSION 1.0.4
+	VERSION 1.0.5
 	LANGUAGES CXX
 )
 
@@ -107,6 +105,7 @@ else ()
 endif ()
 
 find_package(spdlog REQUIRED CONFIG)
+find_package(imgui CONFIG REQUIRED)
 
 # ---- Add source files ----
 
@@ -166,6 +165,7 @@ target_link_libraries(
 		CommonLibSSE::CommonLibSSE
 		DKUtil::DKUtil
 		spdlog::spdlog
+		imgui::imgui
 )
 
 target_precompile_headers(
@@ -209,9 +209,6 @@ if (MSVC)
 			/external:anglebrackets
 			/external:W0
 
-			/W4	# Warning level
-			/WX	# Warning level (warnings are errors)
-
 			"$<$<CONFIG:DEBUG>:>"
 			"$<$<CONFIG:RELEASE>:/Zc:inline;/JMC-;/Ob3>"
 	)
@@ -219,7 +216,6 @@ if (MSVC)
 	target_link_options(
 		${PROJECT_NAME}
 		PRIVATE
-			/WX	# Treat Linker Warnings as Errors
 
 			"$<$<CONFIG:DEBUG>:/INCREMENTAL;/OPT:NOREF;/OPT:NOICF>"
 			"$<$<CONFIG:RELEASE>:/INCREMENTAL:NO;/OPT:REF;/OPT:ICF;/DEBUG:FULL>"

@@ -94,18 +94,14 @@ inline bool  isBetweenAngle(float deg, const float deg_min, const float deg_max)
     return deg <= deg_max;
 }
 
+inline RE::NiPoint2 getXY(RE::NiPoint3 vec) { return RE::NiPoint2{vec.x, vec.y}; }
+
 inline float magnitude(RE::NiPoint2 vec) { return std::sqrt(vec.x * vec.x + vec.y * vec.y); }
-inline float theta(RE::NiPoint2 vec) { return std::atan2(vec.y, vec.x); }
-
-inline void reposition(RE::Actor* victim, RE::Actor* attacker, float dist, float victim_angle_offset, float attacker_angle_offset)
+inline float crossProd(const RE::NiPoint2 a, const RE::NiPoint2 b) { return a.x * b.y - a.y * b.x; }
+inline float dotProd(const RE::NiPoint2 a, const RE::NiPoint2 b) { return a.x * b.x + a.y * b.y; }
+inline float getAngle(RE::NiPoint2 a, RE::NiPoint2 b)
 {
-    RE::NiPoint3 curr_offset = attacker->GetPosition() - victim->GetPosition();
-    RE::NiPoint3 new_offset  = curr_offset * dist / magnitude(RE::NiPoint2(curr_offset.x, curr_offset.y));
-    attacker->SetPosition(victim->GetPosition() + new_offset, true);
-
-    float facing_angle = rad2deg(theta(RE::NiPoint2(-curr_offset.x, -curr_offset.y)));
-    attacker->SetRotationZ(facing_angle + attacker_angle_offset);
-    victim->SetRotationZ(facing_angle + victim_angle_offset);
+    return atan2(crossProd(a, b), dotProd(a, b));
 }
 
 template <class Form>

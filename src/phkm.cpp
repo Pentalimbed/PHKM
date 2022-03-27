@@ -10,12 +10,12 @@
 namespace phkm
 {
 // Called every frame
-void PostHitModule::update()
+void DelayedFuncModule::update()
 {
     auto delta_time = *g_delta_real_time;
-    delayed_funcs_mutex.lock();
+    funcs_mutex.lock();
     std::erase_if(
-        delayed_funcs, [=](auto& pair) {
+        funcs, [=](auto& pair) {
             auto& [delay_time, func] = pair;
             delay_time -= delta_time;
             if (delay_time < 0)
@@ -26,7 +26,14 @@ void PostHitModule::update()
             }
             return false;
         });
-    delayed_funcs_mutex.unlock();
+    funcs_mutex.unlock();
+}
+
+void DelayedFuncModule::flush()
+{
+    funcs_mutex.lock();
+    funcs.clear();
+    funcs_mutex.unlock();
 }
 
 // return true if original func are to be called
@@ -75,7 +82,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     // Non-animated
     if (do_exec && isInRagdoll(victim) && !config->animated_ragdoll_exec)
     {
-        hit_data.totalDamage = 1e9;
+        hit_data.totalDamage = 1e6;
         return true;
     }
 
@@ -86,7 +93,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     {
         logger::debug("No animation selected!");
         if (do_exec && isInRagdoll(victim))
-            hit_data.totalDamage = 1e9;
+            hit_data.totalDamage = 1e6;
         return true;
     }
 
@@ -99,9 +106,11 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     hit_data.totalDamage = 0;
     hit_data.stagger     = 0;
 
-    // Wash your hand
-    prepareForKillmove(attacker);
-    prepareForKillmove(victim);
+    // Wash your hand EDIT: May cause trouble if saving the game during killmove
+    // prepareForKillmove(attacker);
+    // prepareForKillmove(victim);
+    attacker->NotifyAnimationGraph("staggerStop");
+    victim->NotifyAnimationGraph("staggerStop");
 
     // Lottery and play
     std::uniform_int_distribution<size_t> distro(0, entries_copy.size() - 1);
@@ -115,13 +124,11 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
         victim->NotifyAnimationGraph("GetUpStart");
 
         logger::debug("delayed execution!");
-        delayed_funcs_mutex.lock();
-        delayed_funcs.push_back(std::make_pair(0.2f, [=]() {
+        DelayedFuncModule::getSingleton()->addFunc(0.2f, [=]() {
             victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
             victim->NotifyAnimationGraph("GetUpExit");
             entry.play(attacker, victim);
-        }));
-        delayed_funcs_mutex.unlock();
+        });
     }
     else
         entry.play(attacker, victim);
@@ -171,12 +178,13 @@ bool PostHitModule::canExecute(RE::Actor* victim)
         (isInRagdoll(victim) && config->enable_ragdoll_exec);
 }
 
-bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_exec, float total_damage)
+bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, bool& do_exec, float total_damage)
 {
     const auto config = ConfigParser::getSingleton();
 
     // Check enabled
-    if (!(do_exec ? config->enable_exec : config->enable_km))
+    do_exec &= config->enable_exec;
+    if (!(do_exec || config->enable_km))
         return false;
     logger::debug("1");
 
@@ -206,8 +214,12 @@ bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, bool do_e
     // Check damage for killmoves
     //      totalDamage in HitData are positive
     //      whilst arg of HandleHeathDamage is negative and multiplied by difficulty setting (which is actual damage)
-    if (!do_exec && (victim->GetActorValue(RE::ActorValue::kHealth) - total_damage > 0))
-        return false;
+    if (!do_exec)
+    {
+        if (victim->GetActorValue(RE::ActorValue::kHealth) - total_damage > 0)
+            return false;
+        do_exec |= victim->IsBleedingOut() || isInRagdoll(victim);
+    }
     logger::debug("4");
 
     // Check last enemy
@@ -236,10 +248,6 @@ void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& en
     // Killmove v. Execution
     std::erase_if(entries, [&](const auto& item) { return do_exec != item.second.misc_conds.is_execution; });
 
-    // Paired check
-    if (!config->enable_unpaired)
-        std::erase_if(entries, [&](const auto& item) { return !item.second.is_paired; });
-
     // Sneak check
     bool is_sneak_attack = static_cast<bool>(static_cast<uint32_t>(hit_data.flags) & static_cast<uint32_t>(RE::HitData::Flag::kSneakAttack));
     std::erase_if(entries, [&](const auto& item) { return is_sneak_attack != item.second.misc_conds.is_sneak; });
@@ -254,6 +262,21 @@ void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& en
     assert(decap_1h_perk && decap_2h_perk);
     if (config->decap_perk_req && !attacker->HasPerk(is2h(attacker) ? decap_2h_perk : decap_1h_perk))
         std::erase_if(entries, [&](const auto& item) { return item.second.misc_conds.is_decap; });
+
+    // Skel check
+    auto att_skel  = attacker->GetRace()->skeletonModels[attacker->GetActorBase()->IsFemale()].model;
+    auto vic_skel  = victim->GetRace()->skeletonModels[victim->GetActorBase()->IsFemale()].model;
+    auto att_check = [&](std::string skel_name) {
+        return skel_name == att_skel.c_str();
+    };
+    auto vic_check = [&](std::string skel_name) {
+        return skel_name == vic_skel.c_str();
+    };
+    std::erase_if(entries, [&](const auto& item) {
+        auto& entry = item.second;
+        return (entry.attacker_conds.contains("skeleton") && !orCheck(entry.attacker_conds["skeleton"], att_check)) ||
+            (entry.victim_conds.contains("skeleton") && !orCheck(entry.victim_conds["skeleton"], vic_check));
+    });
 
     // Race check
     std::erase_if(entries, [&](const auto& item) {
@@ -288,34 +311,21 @@ void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& en
 
 void PostHitModule::prepareForKillmove(RE::Actor* actor)
 {
-    if (!actor->IsGhost())
-    {
-        setIsGhost(actor, true);
-        delayed_funcs_mutex.lock();
-        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
-            setIsGhost(actor, false);
-        }));
-        delayed_funcs_mutex.unlock();
-    }
     auto para_kwd = RE::TESForm::LookupByEditorID<RE::BGSKeyword>("ImmuneParalysis");
     if (para_kwd && !actor->HasKeyword(para_kwd))
     {
         actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(para_kwd);
-        delayed_funcs_mutex.lock();
-        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
+        DelayedFuncModule::getSingleton()->addFunc(1.0f, [=]() {
             actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(para_kwd);
-        }));
-        delayed_funcs_mutex.unlock();
+        });
     }
     auto push_kwd = RE::TESForm::LookupByEditorID<RE::BGSKeyword>("ImmuneStrongUnrelentingForce");
     if (push_kwd && !actor->HasKeyword(push_kwd))
     {
         actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(push_kwd);
-        delayed_funcs_mutex.lock();
-        delayed_funcs.push_back(std::make_pair(1.0f, [=]() {
+        DelayedFuncModule::getSingleton()->addFunc(1.0f, [=]() {
             actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(push_kwd);
-        }));
-        delayed_funcs_mutex.unlock();
+        });
     }
 }
 } // namespace phkm

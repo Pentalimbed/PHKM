@@ -75,9 +75,6 @@ bool ConfigParser::loadParams(const nlohmann::json& j)
         exec_json.at("npc_execution").get_to(enable_npc_exec);
         exec_json.at("last_enemy_restriction").get_to(last_enemy_exec);
 
-        auto unpaired_json = j.at("unpaired");
-        unpaired_json.at("enabled").get_to(enable_unpaired);
-
         auto misc_json = j.at("misc");
         misc_json.at("essential_protection").get_to(essential_protect);
         misc_json.at("decap_perk_requirement").get_to(decap_perk_req);
@@ -96,21 +93,7 @@ bool ConfigParser::loadParams(const nlohmann::json& j)
 void AnimEntry::play(RE::Actor* attacker, RE::Actor* victim) const
 {
     logger::debug("Now playing {}", name);
-    if (is_paired)
-    {
-        const auto& paired_info = std::get<PairedInfo>(anim_info);
-        playPairedIdle(attacker->currentProcess, attacker, RE::DEFAULT_OBJECT::kActionIdle, paired_info.idle_form, true, false, victim);
-    }
-    else
-    {
-        // AnimEventSink::RegisterSink(attacker);
-        // victim->NotifyAnimationGraph("IdleForceDefaultState");
-
-        const auto& unpaired_info = std::get<UnpairedInfo>(anim_info);
-        reposition(victim, attacker, unpaired_info.dist, unpaired_info.victim_offset_angle, unpaired_info.attacker_offset_angle);
-        attacker->NotifyAnimationGraph(name + attacker_suffix);
-        victim->NotifyAnimationGraph(name + victim_suffix);
-    }
+    playPairedIdle(attacker->currentProcess, attacker, RE::DEFAULT_OBJECT::kActionIdle, idle_form, true, false, victim);
 }
 
 ////////////////////////AnimEntryParser
@@ -154,45 +137,14 @@ std::optional<AnimEntry> AnimEntryParser::parseEntry(const nlohmann::json& j, co
         entry_json = temp_json;
     }
 
-    // Parse anim info
-    if (entry_json.contains("unpaired_anim_info"))
+    // Get idleform
+    auto result = RE::TESForm::LookupByEditorID<RE::TESIdleForm>(name);
+    if (!result)
     {
-        AnimEntry::UnpairedInfo anim_info;
-        auto                    anim_info_json = entry_json["unpaired_anim_info"];
-
-        entry.is_paired = false;
-
-        try
-        {
-            anim_info_json.at("dist").get_to(anim_info.dist);
-            anim_info_json.at("attacker_offset_angle").get_to(anim_info.attacker_offset_angle);
-            anim_info_json.at("victim_offset_angle").get_to(anim_info.victim_offset_angle);
-        }
-        catch (nlohmann::json::out_of_range e)
-        {
-            logger::warn("Entry {} has incomplete anim info! Error: {}", name, e.what());
-            return std::nullopt;
-        }
-
-        entry.anim_info = anim_info;
+        logger::warn("Entry {} has no corresponding IdleForm!", name);
+        return std::nullopt;
     }
-    else
-    {
-        AnimEntry::PairedInfo anim_info;
-        auto                  anim_info_json = entry_json["paired_anim_info"];
-
-        entry.is_paired = true;
-
-        auto result = RE::TESForm::LookupByEditorID<RE::TESIdleForm>(name);
-        if (!result)
-        {
-            logger::warn("Entry {} has no corresponding IdleForm!", name);
-            return std::nullopt;
-        }
-        anim_info.idle_form = result;
-
-        entry.anim_info = anim_info;
-    }
+    entry.idle_form = result;
 
     // Store conditions
     if (entry_json.contains("conditions"))
