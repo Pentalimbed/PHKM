@@ -1,23 +1,22 @@
 {
-  "name": "enemy-friendly-fire",
-  "version-string": "1.1.0",
-  "description": "",
-  "homepage": "",
-  "license": "MIT",
-  "dependencies": [
-    "xbyak",
-    "boost-stl-interfaces",
-    "rsm-binary-io",
-    "spdlog",
-    "nlohmann-json",
-    "tomlplusplus",
-    "xbyak",
-    {
-      "name":  "imgui",
-      "features":  [
-                       "dx11-binding",
-                       "win32-binding"
-                   ]
-  }
-  ]
+    "name": "phkm",
+    "version-string": "1.1.0",
+    "description": "",
+    "homepage": "",
+    "license": "MIT",
+    "dependencies": [
+        "xbyak",
+        "boost-stl-interfaces",
+        "rsm-binary-io",
+        "spdlog",
+        "nlohmann-json",
+        "tomlplusplus",
+        {
+            "name": "imgui",
+            "features": [
+                "dx11-binding",
+                "win32-binding"
+            ]
+        }
+    ]
 }

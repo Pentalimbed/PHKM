@@ -57,12 +57,10 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     logger::debug("Receive hit from: {} to: {}", attacker->GetName(), victim->GetName());
 
     // Bypass for testing
-    if (false)
+    if (true)
     {
-        // Single paired test
-        // AnimEntryParser::getSingleton()->entries["execground01"].play(a_attacker, a_victim);
-        // a_hitData.totalDamage = 0;
-        // return ;
+        AnimEntryParser::getSingleton()->entries["PHKM_andorea1"].play(attacker, victim);
+        return false;
     }
 
     // Check execution and other conditions
@@ -133,7 +131,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     else
         entry.play(attacker, victim);
 
-    return false;
+    return true;
 }
 
 void PostHitModule::bugFixes(RE::Actor* attacker, RE::Actor* victim)
