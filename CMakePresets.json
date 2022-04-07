@@ -32,11 +32,11 @@
             "cacheVariables": {
                 "CMAKE_MSVC_RUNTIME_LIBRARY": {
                     "type": "STRING",
-                    "value": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+                    "value": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
                 },
                 "VCPKG_TARGET_TRIPLET": {
                     "type": "STRING",
-                    "value": "x64-windows-static"
+                    "value": "x64-windows-static-md"
                 }
             },
             "hidden": true,
@@ -52,22 +52,42 @@
                 "vcpkg",
                 "windows"
             ],
+            "hidden": true,
             "name": "vs2022-windows-vcpkg",
             "toolset": "v143"
         },
         {
             "cacheVariables": {
-                "BUILD_SE": "ON"
+                "BUILD_SE": "ON",
+                "SKYRIM_SUPPORT_AE": "OFF"
             },
             "inherits": "vs2022-windows-vcpkg",
             "name": "se"
         },
         {
             "cacheVariables": {
-                "BUILD_SE": "OFF"
+                "BUILD_SE": "OFF",
+                "SKYRIM_SUPPORT_AE": "ON"
             },
             "inherits": "vs2022-windows-vcpkg",
             "name": "ae"
+        }
+    ],
+    "buildPresets": [
+        {
+            "configurePreset": "se",
+            "configuration": "Release",
+            "name": "se-release"
+        },
+        {
+            "configurePreset": "ae",
+            "configuration": "Release",
+            "name": "ae-release"
+        },
+        {
+            "configurePreset": "ae",
+            "configuration": "Debug",
+            "name": "ae-debug"
         }
     ],
     "version": 2

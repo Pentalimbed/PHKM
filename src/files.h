@@ -2,51 +2,43 @@
 
 #include <filesystem>
 #include <variant>
+#include <thread>
 
 #include "nlohmann/json.hpp"
 
 namespace phkm
 {
-class ConfigParser
+struct PhkmConfig
 {
-public:
-    static ConfigParser* getSingleton()
+    static PhkmConfig* getSingleton()
     {
-        static ConfigParser parser;
+        static PhkmConfig parser;
         return &parser;
     }
 
     // OPTIONS
-    // No, I'm not writing getters
-    bool  enable_km;        // enable post-hit killmoves
-    float km_chance;        // killmove chance
-    bool  enable_player_km; // allow player to be killmove'd
-    bool  enable_npc_km;    // allow npc to killmove each other
-    float npc_km_chance;    // chance of npc doing killmoves
-    bool  last_enemy_km;    // only killmoves if it's the last enemy
+    float p_km_player2npc = 1.0;  // chance of player km npc
+    float p_km_npc2player = 1.0;  // chance of npc km player
+    float p_km_npc2npc    = 1.0;  //chance of npc km npc
+    bool  last_enemy_km   = true; // only killmoves if it's the last enemy
 
-    bool enable_exec;           // enable prone execution
-    bool enable_bleedout_exec;  // allow executing bleedout target
-    bool enable_ragdoll_exec;   // allow executing ragdolled target
-    bool animated_ragdoll_exec; // play animation for ragdoll execution
-    bool enable_player_exec;    // allow player to be executed
-    bool enable_npc_exec;       // allow npc to execute each other
-    bool last_enemy_exec;       // only executes if it's the last enemy
+    bool exec_player2npc       = true;  // enable prone execution
+    bool exec_npc2player       = true;  // allow player to be executed
+    bool exec_npc2npc          = false; // allow npc to execute each other
+    bool enable_bleedout_exec  = true;  // allow executing bleedout target
+    bool enable_ragdoll_exec   = true;  // allow executing ragdolled target
+    bool animated_ragdoll_exec = true;  // play animation for ragdoll execution
+    bool last_enemy_exec       = false; // only executes if it's the last enemy
 
-    bool enable_unpaired; // allow unpaired animations
-    bool enable_repos;    // repositioning actors when
-    bool force_3rd;       // force switching to 3rd person camera when km happens
+    bool essential_protect = true; // prevent essentials from getting km'd (and maybe lost their head in the process)
+    bool decap_perk_req    = true; // decap animation needs perk to trigger
 
-    bool essential_protect; // prevent essentials from getting km'd (and maybe lost their head in the process)
-    bool decap_perk_req;    // decap animation needs perk to trigger
-
-    bool        readConfig();
-    inline void disable() { enable_km = enable_exec = false; }
-    inline bool isEnabled() { return enable_km || enable_exec; }
-
-private:
-    bool loadParams(const nlohmann::json& j);
+    void readConfig();
+    void saveConfig();
 };
+
+void to_json(nlohmann::json& j, const PhkmConfig& config);
+void from_json(const nlohmann::json& j, PhkmConfig& config);
 
 struct AnimEntry
 {

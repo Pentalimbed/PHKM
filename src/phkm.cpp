@@ -9,6 +9,8 @@
 
 namespace phkm
 {
+std::default_random_engine random_engine;
+
 // Called every frame
 void DelayedFuncModule::update()
 {
@@ -39,78 +41,51 @@ void DelayedFuncModule::flush()
 // return true if original func are to be called
 bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
 {
-    static std::default_random_engine random_engine;
-    static auto                       config = ConfigParser::getSingleton();
-
-    // Check mod
-    if (!config->isEnabled())
-        return true;
+    static auto config = PhkmConfig::getSingleton();
 
     auto attacker = hit_data.aggressor.get().get();
     if (!attacker)
         return true;
     bugFixes(attacker, victim);
 
+    // Bypass for testing
+    if (false)
+    {
+    }
+
     // Check if actors are good for animation
     if (!checkActors(attacker, victim))
         return true;
-    logger::debug("Receive hit from: {} to: {}", attacker->GetName(), victim->GetName());
 
-    // Bypass for testing
-    if (true)
-    {
-        AnimEntryParser::getSingleton()->entries["PHKM_andorea1"].play(attacker, victim);
-        return false;
-    }
-
-    // Check execution and other conditions
-    bool do_exec = canExecute(victim);
-    if (!canTrigger(attacker, victim, do_exec, hit_data.totalDamage))
-        return true;
-
-    logger::debug("total damage: {}, blocked percent: {}, health: {}",
-                  hit_data.totalDamage, hit_data.percentBlocked, victim->GetActorValue(RE::ActorValue::kHealth));
-
-    // Killmove chance
-    std::uniform_real_distribution<float> km_chance_distro(0, 1.0f);
-    float                                 km_chance = attacker->IsPlayerRef() ? config->km_chance : config->npc_km_chance;
-    if (!do_exec && (km_chance_distro(random_engine) > km_chance))
+    // Check if exec/km conditions are met
+    float dmg_mult = getDamageMult(victim->IsPlayerRef());
+    if (!canTrigger(attacker, victim, hit_data.totalDamage * dmg_mult))
         return true;
 
     // Non-animated
-    if (do_exec && isInRagdoll(victim) && !config->animated_ragdoll_exec)
+    bool play_exec_anims = victim->IsBleedingOut() || isInRagdoll(victim);
+    if (!config->animated_ragdoll_exec && play_exec_anims)
     {
-        hit_data.totalDamage = 1e6;
+        hit_data.totalDamage = victim->GetActorValue(RE::ActorValue::kHealth) / dmg_mult * 2;
         return true;
     }
 
     // Filtering entries
     auto entries_copy(AnimEntryParser::getSingleton()->entries);
-    filterEntries(entries_copy, attacker, victim, hit_data, do_exec);
+    filterEntries(entries_copy, attacker, victim, hit_data, play_exec_anims);
     if (entries_copy.empty())
     {
-        logger::debug("No animation selected!");
-        if (do_exec && isInRagdoll(victim))
-            hit_data.totalDamage = 1e6;
+        hit_data.totalDamage = victim->GetActorValue(RE::ActorValue::kHealth) / dmg_mult * 2;
         return true;
     }
 
-    for (auto& item : entries_copy)
-    {
-        logger::debug("{} selected!", item.second.name);
-    }
-
-    // Alter damage and cancel stagger; * Not needed since the hitdata is not passed down
+    // Alter damage and cancel stagger
     hit_data.totalDamage = 0;
     hit_data.stagger     = 0;
-
-    // Wash your hand EDIT: May cause trouble if saving the game during killmove
-    // prepareForKillmove(attacker);
-    // prepareForKillmove(victim);
     attacker->NotifyAnimationGraph("staggerStop");
     victim->NotifyAnimationGraph("staggerStop");
 
-    // Lottery and play
+    // Choose random anim and play
     std::uniform_int_distribution<size_t> distro(0, entries_copy.size() - 1);
     auto                                  entry = std::next(entries_copy.begin(), distro(random_engine))->second;
 
@@ -121,7 +96,6 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
         victim->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
         victim->NotifyAnimationGraph("GetUpStart");
 
-        logger::debug("delayed execution!");
         DelayedFuncModule::getSingleton()->addFunc(0.2f, [=]() {
             victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
             victim->NotifyAnimationGraph("GetUpExit");
@@ -160,8 +134,11 @@ void PostHitModule::bugFixes(RE::Actor* attacker, RE::Actor* victim)
 
 bool PostHitModule::checkActors(RE::Actor* attacker, RE::Actor* victim)
 {
+    const auto config = PhkmConfig::getSingleton();
     return isValid(attacker) && isValid(victim) &&
-        !attacker->IsBleedingOut() && !isInRagdoll(attacker);
+        !attacker->IsBleedingOut() && !isInRagdoll(attacker) &&
+        !(config->essential_protect &&
+          (victim->IsEssential() || ((victim->boolFlags & RE::Actor::BOOL_FLAGS::kProtected) && !attacker->IsPlayerRef())));
 }
 
 bool PostHitModule::isValid(RE::Actor* actor)
@@ -169,66 +146,31 @@ bool PostHitModule::isValid(RE::Actor* actor)
     return actor->Is3DLoaded() && !actor->IsDead() && !isInPairedAnimation(actor) && !actor->IsOnMount();
 }
 
-bool PostHitModule::canExecute(RE::Actor* victim)
+bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, float actual_damage)
 {
-    const auto config = ConfigParser::getSingleton();
-    return (victim->IsBleedingOut() && config->enable_bleedout_exec) ||
-        (isInRagdoll(victim) && config->enable_ragdoll_exec);
-}
+    const auto config = PhkmConfig::getSingleton();
 
-bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, bool& do_exec, float total_damage)
-{
-    const auto config = ConfigParser::getSingleton();
+    // Check execution
+    bool can_trigger_exec = (config->enable_bleedout_exec && victim->IsBleedingOut()) || (config->enable_ragdoll_exec && isInRagdoll(victim));
+    if (can_trigger_exec)
+        if ((attacker->IsPlayerRef() ? config->exec_player2npc : (victim->IsPlayerRef() ? config->exec_npc2player : config->exec_npc2npc)) &&
+            (config->last_enemy_exec ? (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim)) : true))
+            return true;
 
-    // Check enabled
-    do_exec &= config->enable_exec;
-    if (!(do_exec || config->enable_km))
-        return false;
-    logger::debug("1");
+    // Check killmove
+    bool can_trigger_km = victim->GetActorValue(RE::ActorValue::kHealth) <= actual_damage;
+    if (can_trigger_km)
+        if (config->last_enemy_exec ? (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim)) : true)
+        {
+            // lottery
+            std::uniform_real_distribution<float> km_chance_distro(0, 1.0f);
+            float                                 km_chance =
+                attacker->IsPlayerRef() ? config->p_km_player2npc : (victim->IsPlayerRef() ? config->p_km_npc2player : config->p_km_npc2npc);
+            if (km_chance_distro(random_engine) < km_chance)
+                return true;
+        }
 
-    // Check essential
-    if (victim->IsEssential() && config->essential_protect)
-        return false;
-    if ((victim->boolFlags & RE::Actor::BOOL_FLAGS::kProtected) && !attacker->IsPlayerRef() && config->essential_protect)
-        return false;
-    logger::debug("2");
-
-    // Check player
-    if (victim->IsPlayerRef())
-    {
-        if (!(do_exec ? config->enable_player_exec : config->enable_player_km))
-            return false;
-        total_damage *= getDamageMult(true);
-    }
-    else
-    {
-        // Check npc
-        if (!(attacker->IsPlayerRef() || (do_exec ? config->enable_npc_exec : config->enable_npc_km)))
-            return false;
-        total_damage *= getDamageMult(false);
-    }
-    logger::debug("3");
-
-    // Check damage for killmoves
-    //      totalDamage in HitData are positive
-    //      whilst arg of HandleHeathDamage is negative and multiplied by difficulty setting (which is actual damage)
-    if (!do_exec)
-    {
-        if (victim->GetActorValue(RE::ActorValue::kHealth) - total_damage > 0)
-            return false;
-        do_exec |= victim->IsBleedingOut() || isInRagdoll(victim);
-    }
-    logger::debug("4");
-
-    // Check last enemy
-    if (do_exec ? config->last_enemy_exec : config->last_enemy_km)
-    {
-        // Seems not working on npcs killing player
-        if (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim))
-            return false;
-    }
-    logger::debug("5");
-    return true;
+    return false;
 }
 
 inline void logEntries(const std::unordered_map<std::string, AnimEntry>& entries)
@@ -238,13 +180,13 @@ inline void logEntries(const std::unordered_map<std::string, AnimEntry>& entries
     logger::debug("Remaining: {}", list);
 }
 
-void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool do_exec)
+void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool play_exec_anims)
 {
     auto edid_maps = EditorIdMaps::getSingleton();
-    auto config    = ConfigParser::getSingleton();
+    auto config    = PhkmConfig::getSingleton();
 
     // Killmove v. Execution
-    std::erase_if(entries, [&](const auto& item) { return do_exec != item.second.misc_conds.is_execution; });
+    std::erase_if(entries, [&](const auto& item) { return play_exec_anims != item.second.misc_conds.is_execution; });
 
     // Sneak check
     bool is_sneak_attack = static_cast<bool>(static_cast<uint32_t>(hit_data.flags) & static_cast<uint32_t>(RE::HitData::Flag::kSneakAttack));
@@ -283,13 +225,18 @@ void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& en
             (entry.victim_conds.contains("race") && !edid_maps->checkRace(victim, entry.victim_conds["race"]));
     });
 
-    // WeapType check
+// WeapType check
+#define WEAPTYPECHECK(actor, json, key) orCheck(json[key],                                                                                              \
+                                                [&](int weaptype) {                                                                                     \
+                                                    return (weaptype < 0) != hasWeaponType(actor, stringsEqual(key, "weaptype_r"), std::abs(weaptype)); \
+                                                })
+
     std::erase_if(entries, [&](const auto& item) {
         auto& entry = item.second;
-        return (entry.attacker_conds.contains("weaptype_l") && !edid_maps->checkWeapType(getEquippedWeapon(attacker, true), entry.attacker_conds["weaptype_l"])) ||
-            (entry.victim_conds.contains("weaptype_l") && !edid_maps->checkWeapType(getEquippedWeapon(victim, true), entry.victim_conds["weaptype_l"])) ||
-            (entry.attacker_conds.contains("weaptype_r") && !edid_maps->checkWeapType(getEquippedWeapon(attacker, false), entry.attacker_conds["weaptype_r"])) ||
-            (entry.victim_conds.contains("weaptype_r") && !edid_maps->checkWeapType(getEquippedWeapon(victim, false), entry.victim_conds["weaptype_r"]));
+        return (entry.attacker_conds.contains("weaptype_l") && !WEAPTYPECHECK(attacker, entry.attacker_conds, "weaptype_l")) ||
+            (entry.victim_conds.contains("weaptype_l") && !WEAPTYPECHECK(victim, entry.victim_conds, "weaptype_l")) ||
+            (entry.attacker_conds.contains("weaptype_r") && !WEAPTYPECHECK(attacker, entry.attacker_conds, "weaptype_r")) ||
+            (entry.victim_conds.contains("weaptype_r") && !WEAPTYPECHECK(victim, entry.victim_conds, "weaptype_r"));
     });
 
     // Faction check

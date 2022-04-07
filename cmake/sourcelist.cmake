@@ -4,4 +4,5 @@ set(sources ${sources}
 	src/files.cpp
 	src/utils.cpp
 	src/phkm.cpp
+	src/ui.cpp
 )

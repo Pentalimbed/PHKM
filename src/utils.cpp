@@ -2,6 +2,14 @@
 
 namespace phkm
 {
+union ConditionParam
+{
+    char         c;
+    std::int32_t i;
+    float        f;
+    RE::TESForm* form;
+};
+
 bool orCheck(nlohmann::json j_array, check_func_t func)
 {
     for (const auto& item : j_array)
@@ -71,5 +79,28 @@ bool isInPairedAnimation(RE::Actor* actor)
 
     RE::ConditionCheckParams params(nullptr, actor->As<RE::TESObjectREFR>());
     return isLastHostileActorCond(params);
+}
+
+bool hasWeaponType(RE::Actor* actor, bool right_hand, int weap_type)
+{
+    static bool                 is_initialized = false;
+    static RE::TESConditionItem hasWeaponTypeCond;
+    if (!is_initialized)
+    {
+        is_initialized = true;
+
+        hasWeaponTypeCond.data.functionData.function = RE::FUNCTION_DATA::FunctionID::kGetEquippedItemType;
+        hasWeaponTypeCond.data.flags.opCode          = RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
+        hasWeaponTypeCond.data.object                = RE::CONDITIONITEMOBJECT::kSelf;
+    }
+
+    ConditionParam cond_param;
+    cond_param.i = static_cast<char>(right_hand); // RE::MagicSystem::CastingSource
+
+    hasWeaponTypeCond.data.functionData.params[0] = std::bit_cast<void*>(cond_param);
+    hasWeaponTypeCond.data.comparisonValue.f      = static_cast<float>(weap_type);
+
+    RE::ConditionCheckParams params(actor->As<RE::TESObjectREFR>(), nullptr);
+    return hasWeaponTypeCond(params);
 }
 } // namespace phkm

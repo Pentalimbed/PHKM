@@ -42,9 +42,8 @@ private:
     void bugFixes(RE::Actor* attacker, RE::Actor* victim);
     bool checkActors(RE::Actor* attacker, RE::Actor* victim);
     bool isValid(RE::Actor* actor);
-    bool canExecute(RE::Actor* victim);
-    bool canTrigger(RE::Actor* attacker, RE::Actor* victim, bool& do_exec, float total_damage);
-    void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool do_exec);
+    bool canTrigger(RE::Actor* attacker, RE::Actor* victim, float actual_damage);
+    void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool play_exec_anims);
     void prepareForKillmove(RE::Actor* actor);
 };
 } // namespace phkm

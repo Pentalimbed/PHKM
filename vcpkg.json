@@ -10,7 +10,6 @@
         "rsm-binary-io",
         "spdlog",
         "nlohmann-json",
-        "tomlplusplus",
         {
             "name": "imgui",
             "features": [

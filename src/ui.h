@@ -1,11 +1,6 @@
 #pragma once
 
-#include "DKUtil/GUI.hpp"
-
 namespace phkm
 {
-inline void showMainWindow()
-{
-    ImGui::ShowDemoWindow();
-}
+void drawMenu();
 } // namespace phkm

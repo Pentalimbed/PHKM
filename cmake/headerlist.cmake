@@ -5,5 +5,6 @@ set(headers ${headers}
 	src/phkm.h
 	src/events.h
 	src/files.h
-	# src/ui.h
+	src/ui.h
+	src/cathub.h
 )

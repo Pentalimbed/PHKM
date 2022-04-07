@@ -8,6 +8,11 @@
 
 namespace phkm
 {
+constexpr bool stringsEqual(char const* a, char const* b)
+{
+    return std::string_view(a) == b;
+}
+
 using check_func_t = std::function<bool(nlohmann::json)>;
 bool orCheck(nlohmann::json j_array, check_func_t func);
 bool andCheck(nlohmann::json j_array, check_func_t func);
@@ -49,15 +54,6 @@ struct EditorIdMaps
     {
         return orCheck(cond_json, [&](std::string race_edid) {
             return actor->GetRace() && (actor->GetRace() == race_map[race_edid]);
-        });
-    }
-
-    inline bool checkWeapType(RE::TESObjectWEAP* weapon, nlohmann::json cond_json)
-    {
-        return orCheck(cond_json, [&](int req_weap_type) {
-            return weapon ?
-                (req_weap_type < 0) != (static_cast<int>(weapon->GetWeaponType()) == std::abs(req_weap_type)) :
-                req_weap_type == 0;
         });
     }
 
@@ -141,8 +137,18 @@ inline bool isInRagdoll(RE::Actor* actor)
     return actor->GetKnockState() != RE::KNOCK_STATE_ENUM::kNormal;
 }
 
+template <typename T>
+void tryGet(T& target, nlohmann::json json, const char* key)
+{
+    if (json.contains(key))
+        json.at(key).get_to(target);
+    else
+        logger::warn("Cannot find required key {}, using default value.", key);
+}
+
 // Lazy condition workarounds
 bool isDetectedBy(RE::Actor* subject, RE::Actor* target);
 bool isLastHostileActor(RE::Actor* subject, RE::Actor* target);
 bool isInPairedAnimation(RE::Actor* actor);
+bool hasWeaponType(RE::Actor* actor, bool right_hand, int weap_type);
 } // namespace phkm

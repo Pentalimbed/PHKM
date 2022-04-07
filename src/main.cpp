@@ -1,9 +1,8 @@
 #include "hooks.h"
 #include "files.h"
 #include "phkm.h"
-
-// #include "DKUtil/GUI.hpp"
-// #include "DKUtil/Hook.hpp"
+#include "ui.h"
+#include "cathub.h"
 
 bool installLog()
 {
@@ -34,6 +33,7 @@ namespace phkm
 {
 void processMessage(SKSE::MessagingInterface::Message* a_msg)
 {
+    cathub::CatHubAPI* cathub_api = nullptr;
     switch (a_msg->type)
     {
         case SKSE::MessagingInterface::kDataLoaded:
@@ -42,10 +42,19 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
             stl::write_thunk_call<ProcessHitHook>();
             stl::write_thunk_call<UpdateHook>();
             logger::info("Hook installed.");
+
+            cathub_api = cathub::RequestCatHubAPI();
+            if (cathub_api)
+            {
+                ImGui::SetCurrentContext(cathub_api->getContext());
+                cathub_api->addMenu("Post-hit Killmoves", drawMenu);
+                logger::info("CatHub integration succeed!");
+            }
+            else
+                logger::warn("CatHub not found. In-game configuration disabled!");
+
             break;
         case SKSE::MessagingInterface::kPostLoad:
-            // DKUtil::GUI::InitD3D();
-            // DKUtil::GUI::AddCallback(FUNC_INFO(showMainWindow));
             break;
         case SKSE::MessagingInterface::kPostLoadGame:
             logger::debug("kPostLoadGame");
@@ -102,23 +111,11 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     logger::info("Plugin loaded.");
 
     SKSE::Init(a_skse);
-    SKSE::AllocTrampoline(2 << 4);
+    SKSE::AllocTrampoline(2 * 14);
 
     using namespace phkm;
 
-    try
-    {
-        if (!ConfigParser::getSingleton()->readConfig())
-        {
-            logger::critical("Failed to load config file. Mod disabled.");
-            return false;
-        }
-    }
-    catch (std::exception e)
-    {
-        logger::critical("Failed to parse config file. Mod disabled.");
-        return false;
-    }
+    PhkmConfig::getSingleton()->readConfig();
     logger::info("Config loaded.");
 
     auto messaging = SKSE::GetMessagingInterface();

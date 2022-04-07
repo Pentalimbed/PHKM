@@ -6,8 +6,6 @@
 #include "utils.h"
 #include "events.h"
 
-namespace phkm
-{
 namespace fs = std::filesystem;
 
 const fs::path    plugin_dir  = "Data\\SKSE\\Plugins";
@@ -29,63 +27,88 @@ const std::string victim_suffix   = "_v";
         return _return;                    \
     }
 
-////////////////////////ConfigParser
+namespace phkm
+{
+////////////////////////Config
 
-bool ConfigParser::readConfig()
+void PhkmConfig::readConfig()
 {
     fs::path      complete_config_path = plugin_dir / config_path;
     std::ifstream config_file(complete_config_path);
     if (!config_file.is_open())
     {
         logger::error("Failed to open PHKM.json!");
-        return false;
+        return;
     }
 
     nlohmann::json config_json;
     config_file >> config_json;
-
-    if (!loadParams(config_json))
-    {
-        enable_km = enable_exec = false;
-        return false;
-    }
-
-    config_file.close();
-    return true;
-}
-
-bool ConfigParser::loadParams(const nlohmann::json& j)
-{
     try
     {
-        auto km_json = j.at("killmove");
-        km_json.at("enabled").get_to(enable_km);
-        km_json.at("killmove_chance").get_to(km_chance);
-        km_json.at("killmove_on_player").get_to(enable_player_km);
-        km_json.at("npc_killmove").get_to(enable_npc_km);
-        km_json.at("npc_killmove_chance").get_to(npc_km_chance);
-        km_json.at("last_enemy_restriction").get_to(last_enemy_km);
-
-        auto exec_json = j.at("execution");
-        exec_json.at("enabled").get_to(enable_exec);
-        exec_json.at("bleedout_execution").get_to(enable_bleedout_exec);
-        exec_json.at("ragdoll_execution").get_to(enable_ragdoll_exec);
-        exec_json.at("animated_ragdoll_execution").get_to(animated_ragdoll_exec);
-        exec_json.at("execution_on_player").get_to(enable_player_exec);
-        exec_json.at("npc_execution").get_to(enable_npc_exec);
-        exec_json.at("last_enemy_restriction").get_to(last_enemy_exec);
-
-        auto misc_json = j.at("misc");
-        misc_json.at("essential_protection").get_to(essential_protect);
-        misc_json.at("decap_perk_requirement").get_to(decap_perk_req);
+        config_json.get_to(*this);
     }
-    catch (std::exception e)
+    catch (nlohmann::detail::exception e)
     {
-        logger::error("Failed to parse PHKM.json! Error: {}", e.what());
-        return false;
+        logger::error("Faile to parse PHKM.json.\n\tError: {}", e.what());
+    }
+}
+
+void PhkmConfig::saveConfig()
+{
+    fs::path      complete_config_path = plugin_dir / config_path;
+    std::ofstream config_file(complete_config_path);
+    if (!config_file.is_open())
+    {
+        logger::error("Failed to open PHKM.json!");
+        return;
     }
 
-    return true;
+    config_file << nlohmann::json(*this).dump(4);
+}
+
+void to_json(nlohmann::json& j, const PhkmConfig& config)
+{
+    j = nlohmann::json{{"killmove", {
+                                        {"player_to_npc", config.p_km_player2npc},
+                                        {"npc_to_player", config.p_km_npc2player},
+                                        {"npc_to_npc", config.p_km_npc2npc},
+                                        {"last_enemy", config.last_enemy_km},
+                                    }},
+                       {"execution", {
+                                         {"player_to_npc", config.exec_player2npc},
+                                         {"npc_to_player", config.exec_npc2player},
+                                         {"npc_to_npc", config.exec_npc2npc},
+                                         {"bleedout", config.enable_bleedout_exec},
+                                         {"ragdoll", config.enable_ragdoll_exec},
+                                         {"ragdoll_animated", config.animated_ragdoll_exec},
+                                         {"last_enemy", config.last_enemy_exec},
+                                     }},
+                       {"misc", {
+                                    {"essential_protection", config.essential_protect},
+                                    {"decap_perk_req", config.decap_perk_req},
+                                }}};
+}
+
+void from_json(const nlohmann::json& j, PhkmConfig& config)
+{
+    auto km_json = j.at("killmove");
+    tryGet(config.p_km_player2npc, km_json, "player_to_npc");
+    tryGet(config.p_km_npc2player, km_json, "npc_to_player");
+    tryGet(config.p_km_npc2npc, km_json, "npc_to_npc");
+    tryGet(config.last_enemy_km, km_json, "last_enemy");
+
+    auto exec_json = j.at("execution");
+    tryGet(config.exec_player2npc, exec_json, "player_to_npc");
+    tryGet(config.exec_npc2player, exec_json, "npc_to_player");
+    tryGet(config.exec_npc2npc, exec_json, "npc_to_npc");
+    tryGet(config.enable_bleedout_exec, exec_json, "bleedout");
+    tryGet(config.enable_ragdoll_exec, exec_json, "ragdoll");
+    tryGet(config.animated_ragdoll_exec, exec_json, "ragdoll_animated");
+    tryGet(config.last_enemy_exec, exec_json, "last_enemy");
+
+    auto misc_json = j.at("misc");
+    tryGet(config.essential_protect, misc_json, "essential_protection");
+    tryGet(config.decap_perk_req, misc_json, "decap_perk_req");
 }
 
 ////////////////////////AnimEntry
@@ -222,8 +245,7 @@ void AnimEntryParser::readEntries()
     const auto complete_entries_dir = plugin_dir / entries_dir;
     if (!fs::exists(complete_entries_dir))
     {
-        logger::error("Entries folder \"PHKM\" doesn't exist! Mod disabled.");
-        ConfigParser::getSingleton()->disable();
+        logger::error("Entries folder \"PHKM\" doesn't exist!");
         return;
     }
 
@@ -249,8 +271,7 @@ void AnimEntryParser::readEntries()
 
     if (entries.empty())
     {
-        logger::warn("No entries imported. Mod disabled.");
-        ConfigParser::getSingleton()->disable();
+        logger::warn("No entries imported.");
         return;
     }
 
@@ -292,25 +313,6 @@ void AnimEntryParser::cacheForms()
     getForms(edid_maps->race_map);
     getForms(edid_maps->faction_map);
     getForms(edid_maps->keyword_map);
-
-    // remove entries that uses invalid editorid;
-    // std::erase_if(entries, [&](const auto& item) {
-    //     const auto& entry = item.second;
-    //     for (const auto& actor_conds : {entry.attacker_conds, entry.victim_conds})
-    //     {
-    //         if (actor_conds.contains("race") && !actor_conds["race"].empty())
-    //             for (auto& it : actor_conds["race"].flatten())
-    //                 if (!edid_maps->race_map[it.get<std::string>()]) return true;
-    //         if (actor_conds.contains("faction") && !actor_conds["faction"].empty())
-    //             for (auto& it : actor_conds["faction"].flatten())
-    //                 if (!edid_maps->faction_map[it.get<std::string>()]) return true;
-    //         if (actor_conds.contains("keyword") && !actor_conds["keyword"].empty())
-    //             for (auto& it : actor_conds["keyword"].flatten())
-    //                 if (!edid_maps->keyword_map[it.get<std::string>()]) return true;
-    //     }
-    //     return false;
-    // });
-    // **** On second thought, better not 'cause there're mods that adds variant races etc.
 }
 
 } // namespace phkm

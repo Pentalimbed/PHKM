@@ -64,33 +64,4 @@ inline static REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(38290)};
 #else
 inline static REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(39256)};
 #endif
-
-/*
-struct HandleDamageVfunc
-{
-    // hooking RE::Actor::HandleHeathDamage(RE::Actor* a_attacker, float a_damage)
-    static void thunk(RE::Actor* a_this, RE::Actor* a_attacker, float a_damage)
-    {
-        auto orig_func = [&]() {
-            return func(a_this, a_attacker, a_damage);
-        };
-
-        logger::debug("Calculate health damage!");
-        if (!a_attacker)
-        {
-            logger::debug("No Attacker!");
-            return orig_func();
-        }
-
-        logger::debug("Attacker: {}; Target: {}", a_attacker->GetName(), a_this->GetName());
-
-        auto health = a_this->GetActorValue(RE::ActorValue::kHealth);
-        logger::debug("Damage: {}; Health: {}", a_damage, health);
-
-        return orig_func();
-    }
-    static inline REL::Relocation<decltype(thunk)> func;
-    static inline size_t                           size = 0x104;
-};
-*/
 } // namespace phkm
