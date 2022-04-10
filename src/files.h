@@ -64,21 +64,42 @@ struct AnimEntry
     void play(RE::Actor* attacker, RE::Actor* victim) const;
 };
 
-class AnimEntryParser
+using key_cond_t = std::function<void(RE::Actor*, RE::Actor*)>;
+
+struct KeyEntry
+{
+    std::string              name  = "New Key";
+    int                      key   = 256; // left click
+    std::vector<std::string> anims = {};  // set to empty for all anims
+
+    // Workaround until TESCondition parser came out
+    int         level_diff    = 10;
+    float       enemy_hp      = 0.3f;                     // <1 as percentage, >1 as number
+    float       stamina_cost  = 0.2f;                     // <1 as percentage, >1 as number
+    std::string trigger_sound = "MAGAlterationReleaseSD"; // Sound played when triggered
+};
+
+void to_json(nlohmann::json& j, const KeyEntry& entry);
+void from_json(const nlohmann::json& j, KeyEntry& entry);
+
+class EntryParser
 {
 public:
-    static AnimEntryParser* getSingleton()
+    static EntryParser* getSingleton()
     {
-        static AnimEntryParser parser;
+        static EntryParser parser;
         return &parser;
     }
 
     std::unordered_map<std::string, AnimEntry> entries;
+    std::vector<KeyEntry>                      keys;
 
-    void readEntries();
+    void readAnimEntries();
+    void readKeyEntries();
+    void writeKeyEntries();
 
 private:
-    std::optional<AnimEntry>                   parseEntry(const nlohmann::json& j, const std::string name);
+    std::optional<AnimEntry>                   parseAnimEntry(const nlohmann::json& j, const std::string name);
     std::unordered_map<std::string, AnimEntry> readSingleFile(std::filesystem::path file_path);
     void                                       cacheForms();
 };

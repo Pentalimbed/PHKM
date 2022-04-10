@@ -5,4 +5,6 @@ set(sources ${sources}
 	src/utils.cpp
 	src/phkm.cpp
 	src/ui.cpp
+
+	src/extern/imgui_stdlib.cpp
 )

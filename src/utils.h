@@ -2,12 +2,24 @@
 
 #include "nlohmann/json.hpp"
 
+#include "files.h"
+
 #ifndef M_PI
 #    define M_PI 3.141592653589793238462643383279
 #endif
 
 namespace phkm
 {
+extern std::default_random_engine random_engine;
+
+enum : uint32_t
+{
+    kInvalid        = static_cast<uint32_t>(-1),
+    kKeyboardOffset = 0,
+    kMouseOffset    = 256,
+    kGamepadOffset  = 266
+};
+
 constexpr bool stringsEqual(char const* a, char const* b)
 {
     return std::string_view(a) == b;
@@ -80,6 +92,10 @@ struct EditorIdMaps
         });
     }
 };
+
+bool areActorsReady(RE::Actor* attacker, RE::Actor* victim);
+bool isValid(RE::Actor* actor);
+void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, bool is_sneak, bool play_exec_anims);
 
 inline float deg2rad(float deg) { return static_cast<float>(deg / 180.0 * M_PI); }
 inline float rad2deg(float rad) { return static_cast<float>(rad * 180.0 / M_PI); }

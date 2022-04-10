@@ -53,15 +53,15 @@ struct UpdateHook
 
 typedef void(_fastcall* _setIsGhost)(RE::Actor* actor, bool isGhost);
 #ifdef BUILD_SE
-inline static REL::Relocation<_setIsGhost> setIsGhost{REL::ID(36287)}; // 5D25E0
+inline REL::Relocation<_setIsGhost> setIsGhost{REL::ID(36287)}; // 5D25E0
 #else
-inline static REL::Relocation<_setIsGhost>     setIsGhost{REL::ID(37276)}; // 5F6C60
+inline REL::Relocation<_setIsGhost>     setIsGhost{REL::ID(37276)}; // 5F6C60
 #endif
 
 typedef void(_fastcall* _playPairedIdle)(RE::AIProcess* proc, RE::Actor* attacker, RE::DEFAULT_OBJECT smth, RE::TESIdleForm* idle, bool a5, bool a6, RE::TESObjectREFR* target);
 #ifdef BUILD_SE
-inline static REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(38290)};
+inline REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(38290)};
 #else
-inline static REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(39256)};
+inline REL::Relocation<_playPairedIdle> playPairedIdle{REL::ID(39256)};
 #endif
 } // namespace phkm

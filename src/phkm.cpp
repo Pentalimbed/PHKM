@@ -9,8 +9,6 @@
 
 namespace phkm
 {
-std::default_random_engine random_engine;
-
 // Called every frame
 void DelayedFuncModule::update()
 {
@@ -44,7 +42,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     static auto config = PhkmConfig::getSingleton();
 
     auto attacker = hit_data.aggressor.get().get();
-    if (!attacker)
+    if (!attacker || !victim)
         return true;
     bugFixes(attacker, victim);
 
@@ -54,7 +52,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     }
 
     // Check if actors are good for animation
-    if (!checkActors(attacker, victim))
+    if (!areActorsReady(attacker, victim))
         return true;
 
     // Check if exec/km conditions are met
@@ -71,8 +69,8 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     }
 
     // Filtering entries
-    auto entries_copy(AnimEntryParser::getSingleton()->entries);
-    filterEntries(entries_copy, attacker, victim, hit_data, play_exec_anims);
+    auto entries_copy(EntryParser::getSingleton()->entries); // Now I should avoid copying but whatever
+    filterEntries(entries_copy, attacker, victim, static_cast<uint32_t>(hit_data.flags) & static_cast<uint32_t>(RE::HitData::Flag::kSneakAttack), play_exec_anims);
     if (entries_copy.empty())
     {
         hit_data.totalDamage = victim->GetActorValue(RE::ActorValue::kHealth) / dmg_mult * 2;
@@ -97,6 +95,7 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
         victim->NotifyAnimationGraph("GetUpStart");
 
         DelayedFuncModule::getSingleton()->addFunc(0.2f, [=]() {
+            if (!(isValid(attacker) && isValid(victim))) return;
             victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
             victim->NotifyAnimationGraph("GetUpExit");
             entry.play(attacker, victim);
@@ -116,8 +115,13 @@ void PostHitModule::bugFixes(RE::Actor* attacker, RE::Actor* victim)
         logger::debug("Fixing {} killmove status", victim->GetName());
         victim->boolFlags.reset(RE::Actor::BOOL_FLAGS::kIsInKillMove);
     }
+    if (attacker->IsInKillMove() && !isInPairedAnimation(attacker))
+    {
+        logger::debug("Fixing {} killmove status", victim->GetName());
+        victim->boolFlags.reset(RE::Actor::BOOL_FLAGS::kIsInKillMove);
+    }
     // Prolonged paralysis fix
-    if ((victim->boolBits.underlying() & (uint32_t)RE::Actor::BOOL_BITS::kParalyzed) && !victim->HasEffectWithArchetype(RE::MagicTarget::Archetype::kParalysis))
+    if (victim->boolBits.any(RE::Actor::BOOL_BITS::kParalyzed) && !victim->HasEffectWithArchetype(RE::MagicTarget::Archetype::kParalysis))
     {
         logger::debug("Fixing {} paralysis status", victim->GetName());
         victim->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
@@ -130,20 +134,6 @@ void PostHitModule::bugFixes(RE::Actor* attacker, RE::Actor* victim)
         victim->NotifyAnimationGraph("KillActor");
         victim->KillImpl(attacker, 0, true, true);
     }
-}
-
-bool PostHitModule::checkActors(RE::Actor* attacker, RE::Actor* victim)
-{
-    const auto config = PhkmConfig::getSingleton();
-    return isValid(attacker) && isValid(victim) &&
-        !attacker->IsBleedingOut() && !isInRagdoll(attacker) &&
-        !(config->essential_protect &&
-          (victim->IsEssential() || ((victim->boolFlags & RE::Actor::BOOL_FLAGS::kProtected) && !attacker->IsPlayerRef())));
-}
-
-bool PostHitModule::isValid(RE::Actor* actor)
-{
-    return actor->Is3DLoaded() && !actor->IsDead() && !isInPairedAnimation(actor) && !actor->IsOnMount();
 }
 
 bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, float actual_damage)
@@ -178,80 +168,6 @@ inline void logEntries(const std::unordered_map<std::string, AnimEntry>& entries
     std::string list;
     for (const auto& item : entries) list += item.first + " ";
     logger::debug("Remaining: {}", list);
-}
-
-void PostHitModule::filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, RE::HitData& hit_data, bool play_exec_anims)
-{
-    auto edid_maps = EditorIdMaps::getSingleton();
-    auto config    = PhkmConfig::getSingleton();
-
-    // Killmove v. Execution
-    std::erase_if(entries, [&](const auto& item) { return play_exec_anims != item.second.misc_conds.is_execution; });
-
-    // Sneak check
-    bool is_sneak_attack = static_cast<bool>(static_cast<uint32_t>(hit_data.flags) & static_cast<uint32_t>(RE::HitData::Flag::kSneakAttack));
-    std::erase_if(entries, [&](const auto& item) { return is_sneak_attack != item.second.misc_conds.is_sneak; });
-
-    // Angle check
-    float relative_angle = victim->GetHeadingAngle(attacker->GetPosition(), false);
-    std::erase_if(entries, [&](const auto& item) { return !isBetweenAngle(relative_angle, item.second.misc_conds.min_angle, item.second.misc_conds.max_angle); });
-
-    // Decap check
-    static const auto decap_1h_perk = RE::TESForm::LookupByID<RE::BGSPerk>(0x3af81); // Savage Strike
-    static const auto decap_2h_perk = RE::TESForm::LookupByID<RE::BGSPerk>(0x52d52); // Devastating Blow
-    assert(decap_1h_perk && decap_2h_perk);
-    if (config->decap_perk_req && !attacker->HasPerk(is2h(attacker) ? decap_2h_perk : decap_1h_perk))
-        std::erase_if(entries, [&](const auto& item) { return item.second.misc_conds.is_decap; });
-
-    // Skel check
-    auto att_skel  = attacker->GetRace()->skeletonModels[attacker->GetActorBase()->IsFemale()].model;
-    auto vic_skel  = victim->GetRace()->skeletonModels[victim->GetActorBase()->IsFemale()].model;
-    auto att_check = [&](std::string skel_name) {
-        return skel_name == att_skel.c_str();
-    };
-    auto vic_check = [&](std::string skel_name) {
-        return skel_name == vic_skel.c_str();
-    };
-    std::erase_if(entries, [&](const auto& item) {
-        auto& entry = item.second;
-        return (entry.attacker_conds.contains("skeleton") && !orCheck(entry.attacker_conds["skeleton"], att_check)) ||
-            (entry.victim_conds.contains("skeleton") && !orCheck(entry.victim_conds["skeleton"], vic_check));
-    });
-
-    // Race check
-    std::erase_if(entries, [&](const auto& item) {
-        auto& entry = item.second;
-        return (entry.attacker_conds.contains("race") && !edid_maps->checkRace(attacker, entry.attacker_conds["race"])) ||
-            (entry.victim_conds.contains("race") && !edid_maps->checkRace(victim, entry.victim_conds["race"]));
-    });
-
-// WeapType check
-#define WEAPTYPECHECK(actor, json, key) orCheck(json[key],                                                                                              \
-                                                [&](int weaptype) {                                                                                     \
-                                                    return (weaptype < 0) != hasWeaponType(actor, stringsEqual(key, "weaptype_r"), std::abs(weaptype)); \
-                                                })
-
-    std::erase_if(entries, [&](const auto& item) {
-        auto& entry = item.second;
-        return (entry.attacker_conds.contains("weaptype_l") && !WEAPTYPECHECK(attacker, entry.attacker_conds, "weaptype_l")) ||
-            (entry.victim_conds.contains("weaptype_l") && !WEAPTYPECHECK(victim, entry.victim_conds, "weaptype_l")) ||
-            (entry.attacker_conds.contains("weaptype_r") && !WEAPTYPECHECK(attacker, entry.attacker_conds, "weaptype_r")) ||
-            (entry.victim_conds.contains("weaptype_r") && !WEAPTYPECHECK(victim, entry.victim_conds, "weaptype_r"));
-    });
-
-    // Faction check
-    std::erase_if(entries, [&](const auto& item) {
-        auto& entry = item.second;
-        return (entry.attacker_conds.contains("faction") && !edid_maps->checkFaction(attacker, entry.attacker_conds["faction"])) ||
-            (entry.victim_conds.contains("faction") && !edid_maps->checkFaction(victim, entry.victim_conds["faction"]));
-    });
-
-    // Keyword check
-    std::erase_if(entries, [&](const auto& item) {
-        auto& entry = item.second;
-        return (entry.attacker_conds.contains("keyword") && !edid_maps->checkKeywords(attacker, entry.attacker_conds["keyword"])) ||
-            (entry.victim_conds.contains("keyword") && !edid_maps->checkKeywords(victim, entry.victim_conds["keyword"]));
-    });
 }
 
 void PostHitModule::prepareForKillmove(RE::Actor* actor)

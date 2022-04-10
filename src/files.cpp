@@ -8,24 +8,11 @@
 
 namespace fs = std::filesystem;
 
-const fs::path    plugin_dir  = "Data\\SKSE\\Plugins";
-const fs::path    config_path = "PHKM.json";
-const fs::path    entries_dir = "PHKM";
-const fs::path    entries_ext = ".json";
-const std::vector kwd_types   = {"weapon_l", "weapon_r", "actor", "race"};
-
-const std::string attacker_suffix = "_a";
-const std::string victim_suffix   = "_v";
-
-#define GET_TO(_j, _key, _target, _return) \
-    try                                    \
-    {                                      \
-        _j.at(_key).get_to(_target);       \
-    }                                      \
-    catch (nlohmann::json::out_of_range e) \
-    {                                      \
-        return _return;                    \
-    }
+const fs::path plugin_dir  = "Data\\SKSE\\Plugins";
+const fs::path config_path = "PHKM.json";
+const fs::path key_path    = "PHKM\\keys.json";
+const fs::path entries_dir = "PHKM\\entries";
+const fs::path entries_ext = ".json";
 
 namespace phkm
 {
@@ -42,9 +29,9 @@ void PhkmConfig::readConfig()
     }
 
     nlohmann::json config_json;
-    config_file >> config_json;
     try
     {
+        config_file >> config_json;
         config_json.get_to(*this);
     }
     catch (nlohmann::detail::exception e)
@@ -119,9 +106,34 @@ void AnimEntry::play(RE::Actor* attacker, RE::Actor* victim) const
     playPairedIdle(attacker->currentProcess, attacker, RE::DEFAULT_OBJECT::kActionIdle, idle_form, true, false, victim);
 }
 
+////////////////////////KeyEntry
+
+void to_json(nlohmann::json& j, const KeyEntry& entry)
+{
+    j = nlohmann::json{
+        {"name", entry.name},
+        {"key", entry.key},
+        {"anims", entry.anims},
+        {"level_diff", entry.level_diff},
+        {"stamina_cost", entry.stamina_cost},
+        {"enemy_hp", entry.enemy_hp},
+        {"sound", entry.trigger_sound},
+    };
+}
+void from_json(const nlohmann::json& j, KeyEntry& entry)
+{
+    tryGet(entry.name, j, "name");
+    tryGet(entry.key, j, "key");
+    tryGet(entry.anims, j, "anims");
+    tryGet(entry.level_diff, j, "level_diff");
+    tryGet(entry.stamina_cost, j, "stamina_cost");
+    tryGet(entry.enemy_hp, j, "enemy_hp");
+    tryGet(entry.trigger_sound, j, "sound");
+}
+
 ////////////////////////AnimEntryParser
 
-std::optional<AnimEntry> AnimEntryParser::parseEntry(const nlohmann::json& j, const std::string name)
+std::optional<AnimEntry> EntryParser::parseAnimEntry(const nlohmann::json& j, const std::string name)
 {
     AnimEntry entry;
 
@@ -207,7 +219,7 @@ std::optional<AnimEntry> AnimEntryParser::parseEntry(const nlohmann::json& j, co
     return entry;
 }
 
-std::unordered_map<std::string, AnimEntry> AnimEntryParser::readSingleFile(fs::path file_path)
+std::unordered_map<std::string, AnimEntry> EntryParser::readSingleFile(fs::path file_path)
 {
     std::unordered_map<std::string, AnimEntry> local_entries;
 
@@ -221,14 +233,22 @@ std::unordered_map<std::string, AnimEntry> AnimEntryParser::readSingleFile(fs::p
 
     logger::info("Reading {}:", filename.string());
     nlohmann::json j;
-    entry_file >> j;
+    try
+    {
+        entry_file >> j;
+    }
+    catch (nlohmann::detail::exception e)
+    {
+        logger::error("Failed to parse {}.\n\tError: {}", file_path.string(), e.what());
+        return local_entries;
+    }
 
     // Parse entries
     for (nlohmann::json::iterator it = j.begin(); it != j.end(); ++it)
     {
         if (it.key() != "bases")
         {
-            auto parsed_entry = parseEntry(j, it.key());
+            auto parsed_entry = parseAnimEntry(j, it.key());
             if (parsed_entry.has_value())
             {
                 local_entries[it.key()] = parsed_entry.value();
@@ -240,7 +260,7 @@ std::unordered_map<std::string, AnimEntry> AnimEntryParser::readSingleFile(fs::p
     return local_entries;
 }
 
-void AnimEntryParser::readEntries()
+void EntryParser::readAnimEntries()
 {
     const auto complete_entries_dir = plugin_dir / entries_dir;
     if (!fs::exists(complete_entries_dir))
@@ -258,13 +278,9 @@ void AnimEntryParser::readEntries()
                 auto local_entries = readSingleFile(dir_entry);
                 entries.merge(local_entries);
             }
-            catch (nlohmann::json::out_of_range e)
+            catch (nlohmann::detail::exception e)
             {
-                logger::warn("Required items not found reading {}. Error: {}", dir_entry.path().filename().string(), e.what());
-            }
-            catch (nlohmann::json::type_error e)
-            {
-                logger::warn("Entry {} has incorrect format and cannot be parsed.", dir_entry.path().filename().string());
+                logger::error("Failed to parse {}.\n\tError: {}", dir_entry.path().filename().string(), e.what());
             }
         }
     }
@@ -280,7 +296,43 @@ void AnimEntryParser::readEntries()
     logger::info("Entry processing completed.");
 }
 
-void AnimEntryParser::cacheForms()
+void EntryParser::readKeyEntries()
+{
+    fs::path      complete_path = plugin_dir / key_path;
+    std::ifstream entry_file(complete_path);
+    if (!entry_file.is_open())
+    {
+        logger::error("Failed to open {}!", complete_path.string());
+        return;
+    }
+
+    nlohmann::json j;
+    try
+    {
+        entry_file >> j;
+    }
+    catch (nlohmann::detail::exception e)
+    {
+        logger::error("Failed to parse {}.\n\tError: {}", complete_path.string(), e.what());
+        return;
+    }
+    tryGet(keys, j, "key_entries");
+}
+
+void EntryParser::writeKeyEntries()
+{
+    fs::path      complete_path = plugin_dir / key_path;
+    std::ofstream entry_file(complete_path);
+    if (!entry_file.is_open())
+    {
+        logger::error("Failed to open {}!", complete_path.string());
+        return;
+    }
+
+    entry_file << nlohmann::json{{"key_entries", keys}}.dump(4);
+}
+
+void EntryParser::cacheForms()
 {
     logger::info("{} entries read. Now caching forms.", entries.size());
 

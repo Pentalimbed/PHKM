@@ -1,6 +1,6 @@
 #include "hooks.h"
+#include "events.h"
 #include "files.h"
-#include "phkm.h"
 #include "ui.h"
 #include "cathub.h"
 
@@ -37,12 +37,18 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
     switch (a_msg->type)
     {
         case SKSE::MessagingInterface::kDataLoaded:
-            logger::debug("kDataLoaded");
-            AnimEntryParser::getSingleton()->readEntries();
+            logger::info("Reading Entries.");
+            EntryParser::getSingleton()->readAnimEntries();
+            EntryParser::getSingleton()->readKeyEntries();
+
+            logger::info("Registering Events.");
+            InputEventSink::RegisterSink();
+
+            logger::info("Installing Hook.");
             stl::write_thunk_call<ProcessHitHook>();
             stl::write_thunk_call<UpdateHook>();
-            logger::info("Hook installed.");
 
+            logger::info("Looking for CatHub.");
             cathub_api = cathub::RequestCatHubAPI();
             if (cathub_api)
             {
@@ -57,7 +63,6 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
         case SKSE::MessagingInterface::kPostLoad:
             break;
         case SKSE::MessagingInterface::kPostLoadGame:
-            logger::debug("kPostLoadGame");
             DelayedFuncModule::getSingleton()->flush();
             break;
         case SKSE::MessagingInterface::kPostPostLoad:
