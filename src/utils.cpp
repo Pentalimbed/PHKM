@@ -1,5 +1,5 @@
 #include "utils.h"
-#include "files.h"
+#include "hooks.h"
 
 namespace phkm
 {
@@ -12,6 +12,53 @@ union ConditionParam
     float        f;
     RE::TESForm* form;
 };
+
+void DelayedFuncs::update()
+{
+    auto delta_time = *g_delta_real_time;
+    funcs_mutex.lock();
+    std::erase_if(
+        funcs, [=](auto& pair) {
+            auto& [delay_time, func] = pair;
+            delay_time -= delta_time;
+            if (delay_time < 0)
+            {
+                logger::debug("Executing delayed func");
+                func();
+                return true;
+            }
+            return false;
+        });
+    funcs_mutex.unlock();
+}
+
+void DelayedFuncs::flush()
+{
+    funcs_mutex.lock();
+    funcs.clear();
+    funcs_mutex.unlock();
+}
+
+bool InCombatList::isLastHostileActorInRange(RE::Actor* subject, RE::Actor* enemy, float dist)
+{
+    bool result = true;
+
+    mutex.lock();
+    for (const auto actor : list)
+    {
+        if ((actor != enemy) &&
+            (actor != subject) &&
+            (actor->IsHostileToActor(subject)) &&
+            (magnitude(actor->GetPosition() - subject->GetPosition()) < dist))
+        {
+            result = false;
+            break;
+        }
+    }
+    mutex.unlock();
+
+    return result;
+}
 
 bool orCheck(nlohmann::json j_array, check_func_t func)
 {
@@ -114,6 +161,30 @@ void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Acto
         return (entry.attacker_conds.contains("keyword") && !edid_maps->checkKeywords(attacker, entry.attacker_conds["keyword"])) ||
             (entry.victim_conds.contains("keyword") && !edid_maps->checkKeywords(victim, entry.victim_conds["keyword"]));
     });
+}
+
+void dispelParalysisFx(RE::Actor* actor)
+{
+    const auto effects = actor->GetActiveEffectList();
+    if (!effects)
+    {
+        return;
+    }
+
+    std::vector<RE::ActiveEffect*> queued;
+    for (const auto& effect : *effects)
+    {
+        const auto setting = effect ? effect->GetBaseObject() : nullptr;
+        if (setting && (setting->HasArchetype(RE::MagicTarget::Archetype::kParalysis) || setting->HasKeyword("MagicParalysis")))
+        {
+            queued.push_back(effect);
+        }
+    }
+
+    for (const auto& effect : queued)
+    {
+        effect->Dispel(false);
+    }
 }
 
 bool isDetectedBy(RE::Actor* subject, RE::Actor* target)

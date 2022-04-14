@@ -21,7 +21,7 @@ public:
             logger::debug("return to normal!");
             auto actor = const_cast<RE::Actor*>(a_event->holder->As<RE::Actor>());
             actor->NotifyAnimationGraph("WeapOutRightReplaceForceEquip");
-            DelayedFuncModule::getSingleton()->addFunc(0.1, [=]() { actor->NotifyAnimationGraph("WeapEquip_Out"); });
+            DelayedFuncs::getSingleton()->addFunc(0.1, [=]() { actor->NotifyAnimationGraph("WeapEquip_Out"); });
             actor->RemoveAnimationGraphEventSink(this);
         }
 
@@ -131,11 +131,9 @@ public:
                         if (isInRagdoll(target))
                         {
                             target->SetPosition(RE::NiPoint3(target->data.location.x, target->data.location.y, player->GetPositionZ()), true);
-                            target->SetActorValue(RE::ActorValue::kParalysis, 0);
-                            target->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
                             target->NotifyAnimationGraph("GetUpStart");
 
-                            DelayedFuncModule::getSingleton()->addFunc(0.2f, [=]() {
+                            DelayedFuncs::getSingleton()->addFunc(0.2f, [=]() {
                                 if (!(isValid(player) && isValid(target))) return;
                                 target->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
                                 target->NotifyAnimationGraph("GetUpExit");
@@ -159,4 +157,44 @@ public:
         RE::BSInputDeviceManager::GetSingleton()->AddEventSink(&_sink);
     }
 };
+
+class CombatEventSink :
+    public RE::BSTEventSink<RE::TESCombatEvent>,
+    public RE::BSTEventSink<RE::TESDeathEvent>
+{
+public:
+    virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*)
+    {
+        if (a_event && a_event->actor && a_event->actor.get()->As<RE::Actor>())
+        {
+            auto combat_list = InCombatList::getSingleton();
+            if (a_event->newState == RE::ACTOR_COMBAT_STATE::kCombat)
+                combat_list->insert(a_event->actor.get()->As<RE::Actor>());
+            else if (a_event->newState == RE::ACTOR_COMBAT_STATE::kNone)
+                combat_list->erase(a_event->actor.get()->As<RE::Actor>());
+        }
+        return RE::BSEventNotifyControl::kContinue;
+    }
+    virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*)
+    {
+        if (a_event && a_event->actorDying)
+        {
+            auto combat_list = InCombatList::getSingleton();
+            auto actorHandle = a_event->actorDying->GetHandle();
+            if (actorHandle && actorHandle.get()->As<RE::Actor>())
+                combat_list->erase(actorHandle.get()->As<RE::Actor>());
+        }
+        return RE::BSEventNotifyControl::kContinue;
+    }
+
+    static void RegisterSink()
+    {
+        static CombatEventSink _sink;
+
+        auto scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+        scriptEventSourceHolder->GetEventSource<RE::TESCombatEvent>()->AddEventSink(&_sink);
+        scriptEventSourceHolder->GetEventSource<RE::TESDeathEvent>()->AddEventSink(&_sink);
+    }
+};
+
 } // namespace phkm

@@ -9,33 +9,6 @@
 
 namespace phkm
 {
-// Called every frame
-void DelayedFuncModule::update()
-{
-    auto delta_time = *g_delta_real_time;
-    funcs_mutex.lock();
-    std::erase_if(
-        funcs, [=](auto& pair) {
-            auto& [delay_time, func] = pair;
-            delay_time -= delta_time;
-            if (delay_time < 0)
-            {
-                logger::debug("Executing delayed func");
-                func();
-                return true;
-            }
-            return false;
-        });
-    funcs_mutex.unlock();
-}
-
-void DelayedFuncModule::flush()
-{
-    funcs_mutex.lock();
-    funcs.clear();
-    funcs_mutex.unlock();
-}
-
 // return true if original func are to be called
 bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
 {
@@ -78,10 +51,12 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
     }
 
     // Alter damage and cancel stagger
-    hit_data.totalDamage = 0;
-    hit_data.stagger     = 0;
+    hit_data.stagger = 0;
     attacker->NotifyAnimationGraph("staggerStop");
     victim->NotifyAnimationGraph("staggerStop");
+    victim->SetActorValue(RE::ActorValue::kParalysis, 0);
+    victim->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
+    dispelParalysisFx(victim);
 
     // Choose random anim and play
     std::uniform_int_distribution<size_t> distro(0, entries_copy.size() - 1);
@@ -89,12 +64,12 @@ bool PostHitModule::process(RE::Actor* victim, RE::HitData& hit_data)
 
     if (isInRagdoll(victim))
     {
+        hit_data.totalDamage = 0;
+
         victim->SetPosition(RE::NiPoint3(victim->data.location.x, victim->data.location.y, attacker->GetPositionZ()), true);
-        victim->SetActorValue(RE::ActorValue::kParalysis, 0);
-        victim->boolBits.reset(RE::Actor::BOOL_BITS::kParalyzed);
         victim->NotifyAnimationGraph("GetUpStart");
 
-        DelayedFuncModule::getSingleton()->addFunc(0.2f, [=]() {
+        DelayedFuncs::getSingleton()->addFunc(0.2f, [=]() {
             if (!(isValid(attacker) && isValid(victim))) return;
             victim->actorState1.knockState = RE::KNOCK_STATE_ENUM::kNormal;
             victim->NotifyAnimationGraph("GetUpExit");
@@ -143,14 +118,25 @@ bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, float act
     // Check execution
     bool can_trigger_exec = (config->enable_bleedout_exec && victim->IsBleedingOut()) || (config->enable_ragdoll_exec && isInRagdoll(victim));
     if (can_trigger_exec)
+    {
         if ((attacker->IsPlayerRef() ? config->exec_player2npc : (victim->IsPlayerRef() ? config->exec_npc2player : config->exec_npc2npc)) &&
-            (config->last_enemy_exec ? (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim)) : true))
+            (!config->last_enemy_exec ||
+             (config->safe_distance < 0 ?
+                  (victim->IsPlayerRef() || isLastHostileActor(attacker, victim)) :
+                  InCombatList::getSingleton()->isLastHostileActorInRange(attacker, victim, config->safe_distance))))
+        {
             return true;
+        }
+    }
 
     // Check killmove
     bool can_trigger_km = victim->GetActorValue(RE::ActorValue::kHealth) <= actual_damage;
     if (can_trigger_km)
-        if (config->last_enemy_exec ? (!victim->IsPlayerRef() && !isLastHostileActor(attacker, victim)) : true)
+    {
+        if (!config->last_enemy_km ||
+            (config->safe_distance < 0 ?
+                 (victim->IsPlayerRef() || isLastHostileActor(attacker, victim)) :
+                 InCombatList::getSingleton()->isLastHostileActorInRange(attacker, victim, config->safe_distance)))
         {
             // lottery
             std::uniform_real_distribution<float> km_chance_distro(0, 1.0f);
@@ -159,6 +145,7 @@ bool PostHitModule::canTrigger(RE::Actor* attacker, RE::Actor* victim, float act
             if (km_chance_distro(random_engine) < km_chance)
                 return true;
         }
+    }
 
     return false;
 }
@@ -176,7 +163,7 @@ void PostHitModule::prepareForKillmove(RE::Actor* actor)
     if (para_kwd && !actor->HasKeyword(para_kwd))
     {
         actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(para_kwd);
-        DelayedFuncModule::getSingleton()->addFunc(1.0f, [=]() {
+        DelayedFuncs::getSingleton()->addFunc(1.0f, [=]() {
             actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(para_kwd);
         });
     }
@@ -184,7 +171,7 @@ void PostHitModule::prepareForKillmove(RE::Actor* actor)
     if (push_kwd && !actor->HasKeyword(push_kwd))
     {
         actor->GetObjectReference()->As<RE::BGSKeywordForm>()->AddKeyword(push_kwd);
-        DelayedFuncModule::getSingleton()->addFunc(1.0f, [=]() {
+        DelayedFuncs::getSingleton()->addFunc(1.0f, [=]() {
             actor->GetObjectReference()->As<RE::BGSKeywordForm>()->RemoveKeyword(push_kwd);
         });
     }

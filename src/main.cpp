@@ -43,6 +43,7 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
 
             logger::info("Registering Events.");
             InputEventSink::RegisterSink();
+            CombatEventSink::RegisterSink();
 
             logger::info("Installing Hook.");
             stl::write_thunk_call<ProcessHitHook>();
@@ -63,7 +64,8 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
         case SKSE::MessagingInterface::kPostLoad:
             break;
         case SKSE::MessagingInterface::kPostLoadGame:
-            DelayedFuncModule::getSingleton()->flush();
+            DelayedFuncs::getSingleton()->flush();
+            InCombatList::getSingleton()->flush();
             break;
         case SKSE::MessagingInterface::kPostPostLoad:
             break;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include "nlohmann/json.hpp"
 
 #include "files.h"
@@ -10,6 +11,63 @@
 
 namespace phkm
 {
+class DelayedFuncs
+{
+public:
+    static DelayedFuncs* getSingleton()
+    {
+        static DelayedFuncs module;
+        return std::addressof(module);
+    }
+
+    inline void addFunc(double countdown, std::function<void()> func)
+    {
+        funcs_mutex.lock();
+        funcs.push_back(std::make_pair(countdown, func));
+        funcs_mutex.unlock();
+    }
+    void update();
+    void flush();
+
+private:
+    std::vector<std::pair<double, std::function<void()>>> funcs;
+    std::mutex                                            funcs_mutex;
+};
+
+class InCombatList
+{
+public:
+    static InCombatList* getSingleton()
+    {
+        static InCombatList module;
+        return std::addressof(module);
+    }
+
+    inline void insert(RE::Actor* actor)
+    {
+        mutex.lock();
+        list.insert(actor);
+        mutex.unlock();
+    }
+    inline void erase(RE::Actor* actor)
+    {
+        mutex.lock();
+        list.erase(actor);
+        mutex.unlock();
+    }
+    inline void flush()
+    {
+        mutex.lock();
+        list.clear();
+        mutex.unlock();
+    }
+    bool isLastHostileActorInRange(RE::Actor* subject, RE::Actor* enemy, float dist);
+
+private:
+    std::mutex                     mutex;
+    std::unordered_set<RE::Actor*> list;
+};
+
 extern std::default_random_engine random_engine;
 
 enum : uint32_t
@@ -96,6 +154,7 @@ struct EditorIdMaps
 bool areActorsReady(RE::Actor* attacker, RE::Actor* victim);
 bool isValid(RE::Actor* actor);
 void filterEntries(std::unordered_map<std::string, AnimEntry>& entries, RE::Actor* attacker, RE::Actor* victim, bool is_sneak, bool play_exec_anims);
+void dispelParalysisFx(RE::Actor* actor);
 
 inline float deg2rad(float deg) { return static_cast<float>(deg / 180.0 * M_PI); }
 inline float rad2deg(float rad) { return static_cast<float>(rad * 180.0 / M_PI); }
@@ -109,6 +168,7 @@ inline bool  isBetweenAngle(float deg, const float deg_min, const float deg_max)
 inline RE::NiPoint2 getXY(RE::NiPoint3 vec) { return RE::NiPoint2{vec.x, vec.y}; }
 
 inline float magnitude(RE::NiPoint2 vec) { return std::sqrt(vec.x * vec.x + vec.y * vec.y); }
+inline float magnitude(RE::NiPoint3 vec) { return std::sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z); }
 inline float crossProd(const RE::NiPoint2 a, const RE::NiPoint2 b) { return a.x * b.y - a.y * b.x; }
 inline float dotProd(const RE::NiPoint2 a, const RE::NiPoint2 b) { return a.x * b.x + a.y * b.y; }
 inline float getAngle(RE::NiPoint2 a, RE::NiPoint2 b)

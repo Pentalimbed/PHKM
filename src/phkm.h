@@ -4,29 +4,6 @@
 
 namespace phkm
 {
-class DelayedFuncModule
-{
-public:
-    static DelayedFuncModule* getSingleton()
-    {
-        static DelayedFuncModule module;
-        return std::addressof(module);
-    }
-
-    inline void addFunc(double countdown, std::function<void()> func)
-    {
-        funcs_mutex.lock();
-        funcs.push_back(std::make_pair(countdown, func));
-        funcs_mutex.unlock();
-    }
-    void update();
-    void flush();
-
-private:
-    std::vector<std::pair<double, std::function<void()>>> funcs;
-    std::mutex                                            funcs_mutex;
-};
-
 class PostHitModule
 {
 public:

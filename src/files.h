@@ -17,9 +17,9 @@ struct PhkmConfig
     }
 
     // OPTIONS
-    float p_km_player2npc = 1.0;  // chance of player km npc
-    float p_km_npc2player = 1.0;  // chance of npc km player
-    float p_km_npc2npc    = 1.0;  //chance of npc km npc
+    float p_km_player2npc = 1.0f; // chance of player km npc
+    float p_km_npc2player = 1.0f; // chance of npc km player
+    float p_km_npc2npc    = 1.0f; //chance of npc km npc
     bool  last_enemy_km   = true; // only killmoves if it's the last enemy
 
     bool exec_player2npc       = true;  // enable prone execution
@@ -32,6 +32,7 @@ struct PhkmConfig
 
     bool essential_protect = true; // prevent essentials from getting km'd (and maybe lost their head in the process)
     bool decap_perk_req    = true; // decap animation needs perk to trigger
+    int  safe_distance     = -1;   // Last enemy search distance
 
     void readConfig();
     void saveConfig();

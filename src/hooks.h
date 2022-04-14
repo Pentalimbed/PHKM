@@ -38,7 +38,7 @@ struct UpdateHook
     inline static void thunk(RE::Main* a_this, float a2)
     {
         func(a_this, a2);
-        DelayedFuncModule::getSingleton()->update();
+        DelayedFuncs::getSingleton()->update();
     }
     static inline REL::Relocation<decltype(thunk)> func;
 

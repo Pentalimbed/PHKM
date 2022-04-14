@@ -126,10 +126,12 @@ void drawMenu()
                 ImGui::Checkbox("Essential Protection", &config->essential_protect);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Prevent essetial npcs from getting executed/killmoved.");
-
                 ImGui::Checkbox("Decap Perks", &config->decap_perk_req);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Decapitation requires corresponding perks.");
+                ImGui::SliderInt("Safe Distance", &config->safe_distance, -1, 1500);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("If there's no enemy in this range, then ignore last enemy restriction. Set to -1 to disable.\n100 ~ 1 meter / 3 feet");
 
                 ImGui::TreePop();
             }
@@ -175,11 +177,13 @@ void drawMenu()
 
                     ImGui::InputFloat("Stamina Cost", &key_entry.stamina_cost, 0.01f, 10, "%.2f");
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip(">1 - Amount, <=1 - Proportion");
+                        ImGui::SetTooltip(">1 - Amount, <1 - Proportion");
                     ImGui::InputFloat("Max Target Health", &key_entry.enemy_hp, 0.01f, 10, "%.2f");
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip(">1 - Amount, <=1 - Proportion");
+                        ImGui::SetTooltip(">1 - Amount, <1 - Proportion");
                     ImGui::SliderInt("Min Level Difference", &key_entry.level_diff, 0, 100);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Enemies need to be this level lower than player to be able to execute.");
                     ImGui::InputText("Trigger Sound", &key_entry.trigger_sound);
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("Sound played when a target was selected");

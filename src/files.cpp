@@ -73,6 +73,7 @@ void to_json(nlohmann::json& j, const PhkmConfig& config)
                        {"misc", {
                                     {"essential_protection", config.essential_protect},
                                     {"decap_perk_req", config.decap_perk_req},
+                                    {"safe_dist", config.safe_distance},
                                 }}};
 }
 
@@ -96,6 +97,7 @@ void from_json(const nlohmann::json& j, PhkmConfig& config)
     auto misc_json = j.at("misc");
     tryGet(config.essential_protect, misc_json, "essential_protection");
     tryGet(config.decap_perk_req, misc_json, "decap_perk_req");
+    tryGet(config.safe_distance, misc_json, "safe_dist");
 }
 
 ////////////////////////AnimEntry
